@@ -294,6 +294,7 @@
       <button class="btn ghost" id="saveCfg" type="button">Save targets</button>
       <button class="btn ghost" id="exportBtn" type="button">Export backup</button>
       <button class="btn ghost" id="importBtn" type="button">Import backup</button>
+      <button class="btn ghost" id="healthBtn" type="button">Import from Health</button>
       <input type="file" id="importFile" accept="application/json" hidden>
     </div>
   </details>
@@ -765,6 +766,60 @@
     r.onload = () => { try { const p = JSON.parse(r.result); state = { config: Object.assign({}, DEFAULTS.config, p.config), entries: p.entries || [] }; save(); renderSettings(); render(); } catch (err) { alert("Couldn't read that backup file."); } };
     r.readAsText(f);
   });
+  // ---------- Apple Health import (iOS Shortcuts clipboard bridge) ----------
+  // A Shortcut copies JSON like {"date":"2026-07-19","weight":"76.2 kg",
+  // "kcal":"2,250 kcal","protein":"162 g"} (single day or array of days).
+  // Values arrive as Shortcuts-formatted strings, so units/commas are stripped.
+  // A zero kcal/protein means "no Health samples that day", not a real intake
+  // of zero — importing it would fabricate a crit under-eating day, so skip it.
+  function parseHealthImport(text) {
+    let data;
+    try { data = JSON.parse(text); } catch (e) { return []; }
+    const num = (v, lo, hi) => {
+      if (v == null || v === "") return null;
+      const n = typeof v === "number" ? v : parseFloat(String(v).replace(/,/g, "").replace(/[^0-9.eE+\-]/g, ""));
+      return isFinite(n) && n > lo && n <= hi ? n : null;
+    };
+    const out = [];
+    for (const r of (Array.isArray(data) ? data : [data])) {
+      if (!r || typeof r !== "object") continue;
+      const m = /^(\d{4}-\d{2}-\d{2})/.exec(String(r.date || ""));
+      if (!m) continue;
+      const row = {
+        date: m[1],
+        weight: num(r.weight, 20, 400),
+        kcal: num(r.kcal != null ? r.kcal : r.calories, 0, 10000),
+        protein: num(r.protein, 0, 500)
+      };
+      if (row.weight != null || row.kcal != null || row.protein != null) out.push(row);
+    }
+    return out;
+  }
+
+  function mergeHealthRows(rows) {
+    for (const r of rows) {
+      let row = state.entries.find(x => x.date === r.date);
+      if (!row) { row = { date: r.date, weight: null, kcal: null, protein: null }; state.entries.push(row); }
+      if (r.weight != null) row.weight = r.weight;
+      if (r.kcal != null) row.kcal = r.kcal;
+      if (r.protein != null) row.protein = r.protein;
+    }
+    if (rows.length) { save(); render(); }
+    return rows.length;
+  }
+
+  document.getElementById("healthBtn").addEventListener("click", () => {
+    const btn = document.getElementById("healthBtn");
+    const done = msg => { btn.textContent = msg; setTimeout(() => { btn.textContent = "Import from Health"; }, 2500); };
+    if (typeof navigator === "undefined" || !navigator.clipboard || !navigator.clipboard.readText) {
+      done("Needs HTTPS + clipboard"); return;
+    }
+    navigator.clipboard.readText().then(t => {
+      const n = mergeHealthRows(parseHealthImport(t));
+      done(n ? "Imported " + n + " day" + (n === 1 ? "" : "s") + " ✓" : "No Health data on clipboard");
+    }).catch(() => done("Paste not allowed"));
+  });
+
   document.getElementById("resetBtn").addEventListener("click", () => {
     if (confirm("Reset all data and targets to defaults? Your logged days will be cleared.")) {
       state = JSON.parse(JSON.stringify(DEFAULTS)); save(); renderSettings(); render();

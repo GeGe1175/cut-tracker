@@ -17,6 +17,7 @@ Personal single-user app for Jeff: cut fat, keep muscle. Everything lives in `in
   4. **Muscle risk** — intake-based deficit (maintenance − avg kcal) vs fat-supply ceiling (fatMass × 30 kcal/kg/day ≈ 381).
   5. **Protein** — ≥160 g/day.
 - Progress bars to both goals with ETA from current rate; settings panel (all targets editable); JSON export/import.
+- **Import from Health**: reads clipboard JSON put there by Jeff's iOS Shortcut (`{"date":"yyyy-mm-dd","weight":"76.2 kg","kcal":"2,250 kcal","protein":"162 g"}`, single object or array). Units/commas stripped; zero kcal/protein skipped (zero = "no Health samples", importing it would fabricate a crit under-eating day). Merges per date like manual entry. This is the stepping stone to a Capacitor+HealthKit native app (Jeff's stated goal) — keep the parse/merge split so native can reuse it.
 
 ## Non-obvious design decisions (don't silently reverse)
 - **Loss rate = linear regression** over the last 21 days of weigh-ins, widening to all data when the window has <2 points or <7 days span. Never day-to-day deltas — daily swings are glycogen/water.

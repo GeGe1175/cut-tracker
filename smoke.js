@@ -63,5 +63,20 @@ const today = new Date(day0).toISOString().slice(0, 10);
 $("f-date").value = today; $("f-kcal").value = "1700"; $("logForm")._fire("submit");
 expect("under-eating triggers alert", /under-eating|eat more/i.test(strip(rendered["verdict"])), strip(rendered["verdict"]));
 
-console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL PASS");
-process.exit(failures ? 1 : 0);
+// 4. Health import: shortcut-style JSON on the clipboard merges into the log
+global.navigator = {
+  clipboard: {
+    readText: async () =>
+      JSON.stringify({ date: today, weight: "76.2 kg", kcal: "2,250 kcal", protein: "162 g" }),
+  },
+};
+$("healthBtn")._fire("click");
+setTimeout(() => {
+  const row = JSON.parse(store["cutTracker.v1"]).entries.find(e => e.date === today);
+  expect("health import merges clipboard day",
+    row && row.weight === 76.2 && row.kcal === 2250 && row.protein === 162,
+    JSON.stringify(row));
+
+  console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL PASS");
+  process.exit(failures ? 1 : 0);
+}, 10);
