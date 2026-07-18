@@ -1,0 +1,10 @@
+{
+  "name": "cut-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Personal cut dashboard — lose fat, keep muscle. Single-file app, no dependencies.",
+  "scripts": {
+    "dev": "python3 -m http.server 8000",
+    "test": "node smoke.js"
+  }
+}

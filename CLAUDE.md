@@ -1,0 +1,39 @@
+# Cut Tracker — context for Claude
+
+Personal single-user app for Jeff: cut fat, keep muscle. Everything lives in `index.html` (markup + CSS + ~400 lines vanilla JS). No framework, no build step, no backend — this is deliberate; don't introduce tooling unless Jeff asks for a capability that needs it (device sync, API imports).
+
+## Published artifact
+Live at https://claude.ai/code/artifact/9490127c-1f5e-46e8-9312-84ba30e07094 (Jeff uses this on his phone).
+To update it after editing `index.html`: call the Artifact tool with this file's path AND `url` set to that link — without `url`, a new conversation mints a different URL. Keep favicon 🎯 and title "Cut Tracker".
+
+## What the app does
+- Daily log (date / weight kg / kcal / protein g) → localStorage under key `cutTracker.v1`. Partial entries fine; fields merge per date.
+- Trend chart: raw weigh-ins as faint dots, 7-day trailing average as the line, dashed goal lines at 12% (74 kg) and 10% (72.2 kg).
+- Five guardrails over the last 7 logged days, worst one becomes the headline verdict:
+  1. **Loss rate** — target band 0.5–0.7 kg/wk; >1.0 is crit.
+  2. **Eating your target** — flags *under*-eating vs the 2,300 kcal target. This is the app's reason to exist: Jeff once averaged ~1,700 vs a 2,300 target and lost serious strength (weighted dips 40 kg → bodyweight). Under-target must always be at least as loud as over-target.
+  3. **Energy floor** — any single day below RMR (1,964) is crit.
+  4. **Muscle risk** — intake-based deficit (maintenance − avg kcal) vs fat-supply ceiling (fatMass × 30 kcal/kg/day ≈ 381).
+  5. **Protein** — ≥160 g/day.
+- Progress bars to both goals with ETA from current rate; settings panel (all targets editable); JSON export/import.
+
+## Non-obvious design decisions (don't silently reverse)
+- **Loss rate = linear regression** over the last 21 days of weigh-ins, widening to all data when the window has <2 points or <7 days span. Never day-to-day deltas — daily swings are glycogen/water.
+- **Muscle risk uses the intake deficit, not the scale-derived one.** Early-cut water/glycogen losses make kg-on-the-scale × 7,700 kcal wildly overstate the true deficit and would contradict the other cards.
+- **Muscle-risk bands are deliberately loose** (good ≤ ceiling+200, warn to +450, crit beyond): Jeff's *planned* 500 kcal deficit slightly exceeds the ~381 fat ceiling. If on-plan reads yellow forever, the signal dies. Keep "on-plan = green".
+- Verdict priority is crit > warn > good, first match in guardrail order — deliberate, so under-eating outranks everything else at equal severity.
+- Weekly averages over daily numbers, everywhere, in every message shown to Jeff.
+
+## Jeff's numbers (defaults baked into `DEFAULTS.config`)
+RMR 1,964 (hard floor) · cut target 2,300 · maintenance ~2,800 · protein 160 g · rate band 0.5–0.7 kg/wk · cut start 2026-06-25 @ 79.4 kg · goals 74.0 (12%) / 72.2 kg (10%) · fat mass 12.7 kg (June 2026 DEXA). If Jeff reports a new DEXA, update these defaults AND remind him to change the settings panel (localStorage config overrides defaults for existing users).
+
+Upcoming: 2-week Japan trip at maintenance (~2,800) — if he mentions it, that's planned, not a lapse; guardrails judge vs whatever calTarget is set to, so he should bump it in settings for the trip.
+
+## Verify changes
+`npm test` runs `smoke.js`: boots the script under a minimal DOM shim, simulates two weeks of on-plan logging, then an under-eating day, and asserts the verdicts ("On track" → "under-eating"). Extend it when adding guardrails. There's no browser automation here; for visual checks, open `index.html` (or `npm run dev` → localhost:8000).
+
+## Gotchas
+- localStorage is per-origin: file://, localhost, and the artifact URL hold separate data. Jeff's real data likely lives on the artifact origin.
+- Storage key is `cutTracker.v1`. If you change the data shape, migrate on load — don't bump the key and orphan his log.
+- The page is published as an artifact: strict CSP, no external requests, so it must stay fully self-contained (it already is — keep it that way).
+- File starts with `<title>` directly (no doctype/html/head/body) because the Artifact tool wraps it; browsers handle it fine locally too.

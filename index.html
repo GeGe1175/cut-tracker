@@ -1,0 +1,784 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#eef1f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0d1219" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Cut Tracker">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>Cut Tracker</title>
+<style>
+  :root {
+    /* cool clinical neutrals — grey with a faint blue bias, chosen not defaulted */
+    --bg: #eef1f5;
+    --surface: #ffffff;
+    --surface-2: #e7ecf1;
+    --ink: #101720;
+    --ink-muted: #55606f;
+    --ink-faint: #8a94a2;
+    --border: #d8dee6;
+    --border-strong: #c4ccd6;
+    --accent: #2761e8;      /* trend / primary readout — non-semantic */
+    --accent-soft: rgba(39,97,232,0.10);
+    --good: #1a8f5a;
+    --good-soft: rgba(26,143,90,0.12);
+    --warn: #b5760a;
+    --warn-soft: rgba(181,118,10,0.14);
+    --crit: #cf3b3b;
+    --crit-soft: rgba(207,59,59,0.12);
+    --shadow: 0 1px 2px rgba(16,23,32,0.04), 0 6px 20px rgba(16,23,32,0.06);
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, monospace;
+    --sans: -apple-system, "SF Pro Display", "SF Pro Text", system-ui, "Segoe UI", sans-serif;
+    --r: 14px;
+    --r-sm: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1219;
+      --surface: #151d27;
+      --surface-2: #1d2733;
+      --ink: #eef3f8;
+      --ink-muted: #9aa7b6;
+      --ink-faint: #626f7e;
+      --border: #263140;
+      --border-strong: #33404f;
+      --accent: #5f8dff;
+      --accent-soft: rgba(95,141,255,0.14);
+      --good: #3ec081;
+      --good-soft: rgba(62,192,129,0.15);
+      --warn: #e2a534;
+      --warn-soft: rgba(226,165,52,0.16);
+      --crit: #ff6a6a;
+      --crit-soft: rgba(255,106,106,0.15);
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #eef1f5; --surface: #ffffff; --surface-2: #e7ecf1; --ink: #101720;
+    --ink-muted: #55606f; --ink-faint: #8a94a2; --border: #d8dee6; --border-strong: #c4ccd6;
+    --accent: #2761e8; --accent-soft: rgba(39,97,232,0.10);
+    --good: #1a8f5a; --good-soft: rgba(26,143,90,0.12);
+    --warn: #b5760a; --warn-soft: rgba(181,118,10,0.14);
+    --crit: #cf3b3b; --crit-soft: rgba(207,59,59,0.12);
+    --shadow: 0 1px 2px rgba(16,23,32,0.04), 0 6px 20px rgba(16,23,32,0.06);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1219; --surface: #151d27; --surface-2: #1d2733; --ink: #eef3f8;
+    --ink-muted: #9aa7b6; --ink-faint: #626f7e; --border: #263140; --border-strong: #33404f;
+    --accent: #5f8dff; --accent-soft: rgba(95,141,255,0.14);
+    --good: #3ec081; --good-soft: rgba(62,192,129,0.15);
+    --warn: #e2a534; --warn-soft: rgba(226,165,52,0.16);
+    --crit: #ff6a6a; --crit-soft: rgba(255,106,106,0.15);
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .app {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    padding: 20px 16px 64px;
+    max-width: 660px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  h1, h2, h3 { margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+
+  header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 4px 2px 2px; }
+  header h1 { font-size: 21px; font-weight: 640; }
+  header .sub { margin: 0; color: var(--ink-faint); font-size: 12.5px; letter-spacing: 0.02em; text-transform: uppercase; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    box-shadow: var(--shadow);
+    padding: 16px;
+  }
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .card-head h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); }
+  .card-head .hint { font-size: 11.5px; color: var(--ink-faint); }
+
+  /* ---- Verdict hero ---- */
+  .verdict {
+    border-radius: var(--r);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    padding: 18px 18px 16px;
+    position: relative;
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .verdict::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 5px;
+    background: var(--vc, var(--accent));
+  }
+  .verdict .vtag {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 11.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--vc, var(--accent));
+    background: var(--vc-soft, var(--accent-soft));
+    padding: 4px 10px; border-radius: 999px; margin-bottom: 12px;
+  }
+  .verdict .vtag .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .verdict .vmsg { font-size: 20px; font-weight: 620; line-height: 1.25; letter-spacing: -0.015em; }
+  .verdict .vwhy { margin-top: 8px; color: var(--ink-muted); font-size: 13.5px; line-height: 1.5; }
+
+  /* ---- Readouts row ---- */
+  .readouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm);
+    padding: 12px 12px 11px; box-shadow: var(--shadow);
+  }
+  .stat .lbl { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint); }
+  .stat .val { font-family: var(--mono); font-size: 22px; font-weight: 600; margin-top: 5px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .stat .val small { font-size: 12px; font-weight: 500; color: var(--ink-faint); margin-left: 2px; }
+  .stat .cap { font-size: 11px; color: var(--ink-faint); margin-top: 3px; }
+  .stat .val.accent { color: var(--accent); }
+
+  /* ---- Guardrails ---- */
+  .guardrails { display: flex; flex-direction: column; gap: 10px; }
+  .grail {
+    display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm);
+    padding: 13px 15px; box-shadow: var(--shadow); position: relative;
+    border-left: 4px solid var(--gc, var(--border-strong));
+  }
+  .grail .gicon {
+    width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--gc-soft, var(--surface-2)); color: var(--gc, var(--ink-muted));
+    font-size: 13px; font-weight: 700; flex-shrink: 0;
+  }
+  .grail .gbody { min-width: 0; }
+  .grail .gttl { font-size: 13.5px; font-weight: 600; }
+  .grail .gsub { font-size: 12px; color: var(--ink-muted); margin-top: 2px; line-height: 1.45; }
+  .grail .gstate {
+    font-family: var(--sans); font-size: 10.5px; font-weight: 650; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--gc, var(--ink-muted)); text-align: right; white-space: nowrap;
+  }
+  .grail .gval { font-family: var(--mono); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
+
+  /* ---- Chart ---- */
+  .chart-card { padding-bottom: 12px; }
+  #chart { position: relative; width: 100%; }
+  #chart svg { width: 100%; height: auto; display: block; touch-action: none; }
+  .chart-empty { color: var(--ink-faint); font-size: 13px; text-align: center; padding: 42px 10px; line-height: 1.5; }
+  .tooltip {
+    position: absolute; pointer-events: none; z-index: 5; transform: translate(-50%, -118%);
+    background: var(--ink); color: var(--bg); border-radius: 8px; padding: 7px 9px;
+    font-size: 11.5px; line-height: 1.4; white-space: nowrap; opacity: 0; transition: opacity .1s;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  }
+  .tooltip b { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .tooltip .t-date { color: var(--ink-faint); font-size: 10.5px; letter-spacing: 0.03em; }
+
+  /* ---- Progress ---- */
+  .goals { display: flex; flex-direction: column; gap: 14px; }
+  .goal .goal-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .goal .goal-name { font-size: 13px; font-weight: 600; }
+  .goal .goal-name span { color: var(--ink-faint); font-weight: 500; }
+  .goal .goal-meta { font-family: var(--mono); font-size: 12px; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+  .bar { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 999px; background: var(--accent); transition: width .5s ease; }
+  .goal.done .bar > i { background: var(--good); }
+
+  /* ---- Log form + list ---- */
+  form.log { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
+  form.log .field { display: flex; flex-direction: column; gap: 4px; }
+  form.log label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); }
+  input, .btn, details.settings input {
+    font-family: var(--sans); font-size: 15px; color: var(--ink);
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 9px;
+    padding: 9px 10px; width: 100%; -webkit-appearance: none; appearance: none;
+  }
+  input[type="number"], input[type="date"] { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  input:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+  .btn {
+    cursor: pointer; font-weight: 600; text-align: center; width: auto;
+    background: var(--accent); color: #fff; border-color: transparent; transition: filter .12s;
+  }
+  .btn:hover { filter: brightness(1.06); }
+  .btn.ghost { background: var(--surface-2); color: var(--ink-muted); }
+  .btn.row-add { grid-column: 1 / -1; }
+  .loglist { display: flex; flex-direction: column; }
+  .logrow {
+    display: grid; grid-template-columns: 78px 1fr 1fr 1fr 30px; align-items: center; gap: 8px;
+    padding: 9px 2px; border-top: 1px solid var(--border); font-size: 13px;
+  }
+  .logrow:first-child { border-top: 0; }
+  .logrow .d { color: var(--ink-muted); font-size: 12px; }
+  .logrow .m { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .logrow .m .u { color: var(--ink-faint); font-size: 10.5px; }
+  .logrow .m.empty { color: var(--ink-faint); }
+  .logrow .del { background: none; border: none; color: var(--ink-faint); cursor: pointer; font-size: 16px; padding: 4px; line-height: 1; }
+  .logrow .del:hover { color: var(--crit); }
+  .logrow .h { color: var(--ink-faint); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .logrow.head { padding-bottom: 4px; }
+
+  details.settings summary { cursor: pointer; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); list-style: none; }
+  details.settings summary::-webkit-details-marker { display: none; }
+  details.settings summary::after { content: "  ⌄"; color: var(--ink-faint); }
+  details.settings[open] summary::after { content: "  ⌃"; }
+  .settings-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 14px; }
+  .settings-grid .field { display: flex; flex-direction: column; gap: 4px; }
+  .settings-grid label { font-size: 11px; color: var(--ink-muted); }
+  .settings-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+
+  footer { text-align: center; color: var(--ink-faint); font-size: 11px; line-height: 1.6; padding: 4px 8px; }
+  a.reset { color: var(--ink-faint); text-decoration: underline; cursor: pointer; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  @media (max-width: 420px) {
+    .readouts { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .stat .val { font-size: 19px; }
+    form.log { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+
+<main class="app">
+  <header>
+    <div>
+      <h1>Cut Tracker</h1>
+    </div>
+    <p class="sub">Fat down · muscle held</p>
+  </header>
+
+  <section class="verdict" id="verdict"></section>
+
+  <section class="readouts" id="readouts"></section>
+
+  <section class="card chart-card">
+    <div class="card-head">
+      <h2>Weight trend</h2>
+      <span class="hint">daily · 7-day average</span>
+    </div>
+    <div id="chart"></div>
+  </section>
+
+  <section>
+    <div class="card-head" style="margin-bottom:10px;padding:0 2px;">
+      <h2>Guardrails</h2>
+      <span class="hint">last 7 logged days</span>
+    </div>
+    <div class="guardrails" id="guardrails"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Progress to goal</h2><span class="hint" id="progHint"></span></div>
+    <div class="goals" id="progress"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Log a day</h2><span class="hint">weight is the one that matters daily</span></div>
+    <form class="log" id="logForm">
+      <div class="field"><label for="f-date">Date</label><input type="date" id="f-date" required></div>
+      <div class="field"><label for="f-weight">Weight kg</label><input type="number" step="0.01" inputmode="decimal" id="f-weight" placeholder="—"></div>
+      <div class="field"><label for="f-kcal">kcal</label><input type="number" step="1" inputmode="numeric" id="f-kcal" placeholder="—"></div>
+      <div class="field"><label for="f-protein">Protein g</label><input type="number" step="1" inputmode="numeric" id="f-protein" placeholder="—"></div>
+      <button class="btn row-add" type="submit">Save day</button>
+    </form>
+    <div class="loglist" id="logList"></div>
+  </section>
+
+  <details class="card settings">
+    <summary>Targets &amp; data</summary>
+    <div class="settings-grid" id="settings"></div>
+    <div class="settings-actions">
+      <button class="btn ghost" id="saveCfg" type="button">Save targets</button>
+      <button class="btn ghost" id="exportBtn" type="button">Export backup</button>
+      <button class="btn ghost" id="importBtn" type="button">Import backup</button>
+      <input type="file" id="importFile" accept="application/json" hidden>
+    </div>
+  </details>
+
+  <footer>
+    All data stays on this device (local storage). Judge by the weekly average, not the daily number.<br>
+    <a class="reset" id="resetBtn">Reset to defaults</a>
+  </footer>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  const DAY = 86400000;
+  const KEY = "cutTracker.v1";
+
+  const DEFAULTS = {
+    config: {
+      rmr: 1964,            // hard floor — never eat below
+      calTarget: 2300,      // cut intake target
+      maintenance: 2800,    // estimated true maintenance
+      proteinTarget: 160,   // non-negotiable
+      rateLo: 0.5, rateHi: 0.7,   // target loss band kg/wk
+      startDate: "2026-06-25", startWeight: 79.4,
+      goal12: 74.0, goal10: 72.2,
+      fatMass: 12.7,        // kg fat (from DEXA) — sets the fat-supply ceiling
+      fatKcalPerKg: 30      // kcal/day fat can release per kg fat (12.7 × 30 ≈ 380)
+    },
+    entries: []
+  };
+
+  // ---------- state ----------
+  let state = load();
+  function load() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) {
+        const p = JSON.parse(raw);
+        return { config: Object.assign({}, DEFAULTS.config, p.config), entries: p.entries || [] };
+      }
+    } catch (e) {}
+    return JSON.parse(JSON.stringify(DEFAULTS));
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+  // ---------- helpers ----------
+  const dnum = s => Math.round(Date.parse(s + "T00:00:00Z") / DAY);
+  const todayStr = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  const fmt = (n, d = 1) => n == null || isNaN(n) ? "—" : Number(n).toFixed(d);
+  const fmtInt = n => n == null || isNaN(n) ? "—" : Math.round(n).toLocaleString("en-US");
+  const shortDate = s => { const [y, m, d] = s.split("-"); return d + "/" + m; };
+  const sorted = () => state.entries.slice().sort((a, b) => a.date < b.date ? -1 : 1);
+
+  function regressionSlope(pts) {
+    const n = pts.length; if (n < 2) return null;
+    let sx = 0, sy = 0, sxx = 0, sxy = 0;
+    for (const p of pts) { sx += p.x; sy += p.y; sxx += p.x * p.x; sxy += p.x * p.y; }
+    const den = n * sxx - sx * sx; if (den === 0) return null;
+    return (n * sxy - sx * sy) / den;   // kg per day
+  }
+
+  function metrics() {
+    const es = sorted();
+    const weights = es.filter(e => e.weight != null).map(e => ({ x: dnum(e.date), y: +e.weight, date: e.date }));
+    const cals = es.filter(e => e.kcal != null).map(e => ({ x: dnum(e.date), y: +e.kcal }));
+    const prot = es.filter(e => e.protein != null).map(e => ({ x: dnum(e.date), y: +e.protein }));
+
+    const latest = weights.length ? weights[weights.length - 1].x : (es.length ? dnum(es[es.length - 1].date) : dnum(todayStr()));
+
+    // trailing 7-day average series (for the smooth line + trend weight)
+    const trend = weights.map(p => {
+      const win = weights.filter(q => q.x <= p.x && q.x > p.x - 7);
+      return { x: p.x, y: win.reduce((s, q) => s + q.y, 0) / win.length, date: p.date };
+    });
+    const trendWeight = trend.length ? trend[trend.length - 1].y : null;
+
+    // loss rate via regression over recent weigh-ins: prefer the last 21 days,
+    // but widen to all data when the window is too sparse to read a slope
+    let recentW = weights.filter(p => p.x > latest - 21);
+    if (recentW.length < 2 || (recentW[recentW.length - 1].x - recentW[0].x) < 7) recentW = weights;
+    let rate = null, rateN = recentW.length, rateSpan = 0;
+    if (recentW.length >= 2) {
+      rateSpan = recentW[recentW.length - 1].x - recentW[0].x;
+      if (rateSpan >= 7) { const s = regressionSlope(recentW); if (s != null) rate = -s * 7; } // +ve = kg lost/wk
+    }
+
+    const win7 = arr => arr.filter(p => p.x > latest - 7);
+    const avg = arr => arr.length ? arr.reduce((s, p) => s + p.y, 0) / arr.length : null;
+    const c7 = win7(cals), p7 = win7(prot);
+    const avgKcal = avg(c7), avgProt = avg(p7);
+    const minKcal = c7.length ? Math.min.apply(null, c7.map(p => p.y)) : null;
+
+    // intake-based deficit (maintenance − eaten) — steadier than scale-derived,
+    // which early-cut water/glycogen swings distort badly
+    const cfg = state.config;
+    const intakeDef = avgKcal != null ? cfg.maintenance - avgKcal : null;
+    const fatCeil = Math.round(cfg.fatMass * cfg.fatKcalPerKg);
+
+    return { es, weights, trend, trendWeight, rate, rateN, rateSpan, avgKcal, avgProt, minKcal,
+      intakeDef, fatCeil, calDays: c7.length, protDays: p7.length, latest };
+  }
+
+  // ---------- guardrail evaluation ----------
+  function evalGuards(m) {
+    const c = state.config, g = [];
+
+    // 1. Loss rate
+    (function () {
+      let sev, state_, sub, val = m.rate != null ? fmt(m.rate, 2) + " kg/wk" : "—";
+      if (m.rate == null) { sev = "none"; state_ = "No data"; sub = "Log at least 2 weigh-ins spanning a week to read your rate."; }
+      else if (m.rate > 1.0) { sev = "crit"; state_ = "Too fast"; sub = "Above 1 kg/wk pulls hard on muscle — nudge calories up toward maintenance."; }
+      else if (m.rate > c.rateHi) { sev = "warn"; state_ = "Slightly fast"; sub = "Just over your " + c.rateLo + "–" + c.rateHi + " kg/wk band. Add ~150–200 kcal."; }
+      else if (m.rate >= c.rateLo) { sev = "good"; state_ = "On target"; sub = "Right inside the " + c.rateLo + "–" + c.rateHi + " kg/wk band. Hold it."; }
+      else if (m.rate >= 0.15) { sev = "good"; state_ = "Gentle"; sub = "Below band but still losing — fine, especially a low-step week. Tighten only if you want it faster."; }
+      else if (m.rate >= -0.1) { sev = "warn"; state_ = "Stalled"; sub = "Trend is flat. If this holds a full week, trim ~150 kcal or add steps."; }
+      else { sev = "warn"; state_ = "Gaining"; sub = "Trend is up. Expected right after an eat-more phase (glycogen); otherwise re-check intake."; }
+      g.push({ key: "Loss rate", val, sev, state: state_, sub, icon: sevIcon(sev) });
+    })();
+
+    // 2. Eating your target (the flagship — the mistake that cost strength)
+    (function () {
+      let sev, state_, sub, val = m.avgKcal != null ? fmtInt(m.avgKcal) + " kcal" : "—";
+      if (m.avgKcal == null) { sev = "none"; state_ = "No data"; sub = "Log your intake to check you're actually hitting " + c.calTarget + " kcal — not coming under it."; }
+      else if (m.avgKcal < c.rmr) { sev = "crit"; state_ = "Below RMR"; sub = "Averaging under your " + fmtInt(c.rmr) + " kcal floor. This is the under-eating trap — eat up to " + c.calTarget + "."; }
+      else if (m.avgKcal < c.calTarget - 150) { sev = "warn"; state_ = "Under target"; sub = "~" + fmtInt(c.calTarget - m.avgKcal) + " kcal/day under your " + c.calTarget + " target. Last time this crashed your dips. Eat up to it."; }
+      else if (m.avgKcal > c.calTarget + 250) { sev = "warn"; state_ = "Over target"; sub = "~" + fmtInt(m.avgKcal - c.calTarget) + " kcal/day over. Fine occasionally; watch the weekly average."; }
+      else { sev = "good"; state_ = "On target"; sub = "Landing on your " + c.calTarget + " kcal target. This is the win — the deficit is set, just be consistent."; }
+      g.push({ key: "Eating your target", val, sev, state: state_, sub, icon: sevIcon(sev) });
+    })();
+
+    // 3. Energy floor (any single day below RMR)
+    (function () {
+      let sev, state_, sub, val = m.minKcal != null ? fmtInt(m.minKcal) + " kcal" : "—";
+      if (m.minKcal == null) { sev = "none"; state_ = "No data"; sub = "Floor is your RMR, " + fmtInt(c.rmr) + " kcal — never eat a day below it."; }
+      else if (m.minKcal < c.rmr) { sev = "crit"; state_ = "Floor breached"; sub = "A day dipped to " + fmtInt(m.minKcal) + ", under your " + fmtInt(c.rmr) + " RMR floor. No day should go below it."; }
+      else if (m.minKcal < c.rmr + 150) { sev = "warn"; state_ = "Near floor"; sub = "Lowest day was close to your " + fmtInt(c.rmr) + " floor. Keep a buffer."; }
+      else { sev = "good"; state_ = "Clear"; sub = "Every logged day stayed above your " + fmtInt(c.rmr) + " RMR floor."; }
+      g.push({ key: "Energy floor", val, sev, state: state_, sub, icon: sevIcon(sev) });
+    })();
+
+    // 4. Muscle-risk — intake deficit vs what fat stores can actually supply
+    (function () {
+      let sev, state_, sub, val;
+      if (m.intakeDef == null) { sev = "none"; state_ = "No data"; val = "—"; sub = "Your " + fmt(state.config.fatMass, 1) + " kg of fat can release ~" + fmtInt(m.fatCeil) + " kcal/day. Log intake to check your deficit fits inside that."; }
+      else {
+        val = fmtInt(Math.max(0, m.intakeDef)) + " kcal/d";
+        const excess = m.intakeDef - m.fatCeil;
+        if (m.intakeDef <= 0) { sev = "good"; state_ = "No deficit"; sub = "Eating at or above maintenance this week — no muscle risk from energy shortfall."; }
+        else if (excess <= 200) { sev = "good"; state_ = "Fat-fuelled"; sub = "Your ~" + fmtInt(m.intakeDef) + " kcal/day deficit sits at or near the ~" + fmtInt(m.fatCeil) + " your fat stores can supply — protein and training cover the rest. Muscle protected."; }
+        else if (excess < 450) { sev = "warn"; state_ = "Stretching"; sub = "~" + fmtInt(excess) + " kcal/day beyond what fat can cover — the shortfall leans on muscle and glycogen."; }
+        else { sev = "crit"; state_ = "Overreaching"; sub = "~" + fmtInt(excess) + " kcal/day past your fat stores' ~" + fmtInt(m.fatCeil) + " kcal ceiling — real muscle-loss territory. Eat more."; }
+      }
+      g.push({ key: "Muscle risk", val, sev, state: state_, sub, icon: sevIcon(sev) });
+    })();
+
+    // 5. Protein
+    (function () {
+      const c = state.config;
+      let sev, state_, sub, val = m.avgProt != null ? fmtInt(m.avgProt) + " g" : "—";
+      if (m.avgProt == null) { sev = "none"; state_ = "No data"; sub = "Target " + c.proteinTarget + " g/day — the muscle-retention lever independent of calories."; }
+      else if (m.avgProt < c.proteinTarget - 15) { sev = "crit"; state_ = "Low"; sub = "~" + fmtInt(c.proteinTarget - m.avgProt) + " g/day under your " + c.proteinTarget + " g floor. This is the muscle-loss lever you control — push it up."; }
+      else if (m.avgProt < c.proteinTarget) { sev = "warn"; state_ = "Just short"; sub = "A touch under " + c.proteinTarget + " g. Close the gap — it's non-negotiable on a cut."; }
+      else { sev = "good"; state_ = "Met"; sub = "Hitting your " + c.proteinTarget + " g floor. Best insurance for lean mass in a deficit."; }
+      g.push({ key: "Protein", val, sev, state: state_, sub, icon: sevIcon(sev) });
+    })();
+
+    return g;
+  }
+
+  function sevIcon(s) { return s === "good" ? "✓" : s === "warn" ? "!" : s === "crit" ? "✕" : "·"; }
+  function sevColor(s) {
+    return { good: "var(--good)", warn: "var(--warn)", crit: "var(--crit)", none: "var(--border-strong)" }[s];
+  }
+  function sevSoft(s) {
+    return { good: "var(--good-soft)", warn: "var(--warn-soft)", crit: "var(--crit-soft)", none: "var(--surface-2)" }[s];
+  }
+
+  // ---------- headline verdict ----------
+  function verdict(m, guards) {
+    // priority: any crit > any warn > good; give the single most actionable message
+    const crit = guards.find(g => g.sev === "crit");
+    const warn = guards.find(g => g.sev === "warn");
+    if (crit) return { sev: "crit", tag: "Act today", msg: critMsg(crit), why: crit.sub };
+    if (warn) return { sev: "warn", tag: "Caution", msg: warnMsg(warn), why: warn.sub };
+    const anyData = guards.some(g => g.sev !== "none");
+    if (!anyData) return { sev: "accent", tag: "Getting started", msg: "Log your weight and intake to get a read.",
+      why: "The whole point is catching the under-eating early — a few days of data and the guardrails light up." };
+    return { sev: "good", tag: "On track", msg: "Losing at the right rate, eating enough.",
+      why: "This is exactly the state to hold: strength preserved, fat coming off steadily. Keep the weekly average in the band." };
+  }
+  function critMsg(g) {
+    if (g.key === "Eating your target" || g.key === "Energy floor") return "You're under-eating — eat more.";
+    if (g.key === "Loss rate") return "Losing too fast — eat more.";
+    if (g.key === "Muscle risk") return "Deficit too deep — muscle's at risk.";
+    if (g.key === "Protein") return "Protein's too low — push it up.";
+    return g.state;
+  }
+  function warnMsg(g) {
+    if (g.key === "Eating your target") return "Under your calorie target — eat up to it.";
+    if (g.key === "Loss rate") return "Slightly fast — nudge calories up.";
+    if (g.key === "Muscle risk") return "Deficit is stretching what fat can cover.";
+    if (g.key === "Protein") return "Protein's just short of your floor.";
+    if (g.key === "Energy floor") return "A day ran close to your floor.";
+    return g.state;
+  }
+
+  // ---------- chart ----------
+  let chartCtx = null;
+  function drawChart(m) {
+    const box = document.getElementById("chart");
+    box.querySelectorAll(".tooltip").forEach(n => n.remove());
+    if (m.weights.length < 1) {
+      box.innerHTML = '<div class="chart-empty">No weigh-ins yet.<br>Log a few days and your trend line appears here.</div>';
+      chartCtx = null; return;
+    }
+    const c = state.config;
+    const W = 660, H = 250, padL = 34, padR = 14, padT = 14, padB = 26;
+    const xs = m.weights.map(p => p.x);
+    let minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
+    if (minX === maxX) { minX -= 1; maxX += 1; }
+    const ysAll = m.weights.map(p => p.y).concat([c.goal12]);
+    let minY = Math.min.apply(null, ysAll) - 0.4;
+    let maxY = Math.max.apply(null, m.weights.map(p => p.y)) + 0.4;
+    if (maxY - minY < 1.5) { const mid = (maxY + minY) / 2; minY = mid - 0.9; maxY = mid + 0.9; }
+
+    const X = v => padL + (v - minX) / (maxX - minX) * (W - padL - padR);
+    const Y = v => padT + (maxY - v) / (maxY - minY) * (H - padT - padB);
+
+    const grid = [], ticks = 4;
+    for (let i = 0; i <= ticks; i++) {
+      const gv = minY + (maxY - minY) * i / ticks, gy = Y(gv);
+      grid.push('<line x1="' + padL + '" y1="' + gy.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + gy.toFixed(1) + '" class="grid"/>');
+      grid.push('<text x="' + (padL - 6) + '" y="' + (gy + 3.5).toFixed(1) + '" class="ylab">' + gv.toFixed(1) + '</text>');
+    }
+
+    // x labels: first, middle, last
+    const xlabIdx = m.weights.length === 1 ? [0] : [0, Math.floor((m.weights.length - 1) / 2), m.weights.length - 1];
+    const xlabs = Array.from(new Set(xlabIdx)).map(i => {
+      const p = m.weights[i];
+      return '<text x="' + X(p.x).toFixed(1) + '" y="' + (H - 8) + '" class="xlab">' + shortDate(p.date) + '</text>';
+    }).join("");
+
+    // goal reference lines (only if within view)
+    const goalLine = (gy, label, within) => within ?
+      '<line x1="' + padL + '" y1="' + gy.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + gy.toFixed(1) + '" class="goal-line"/>' +
+      '<text x="' + (W - padR) + '" y="' + (gy - 5).toFixed(1) + '" class="goal-lab">' + label + '</text>' : "";
+    const g12in = c.goal12 >= minY && c.goal12 <= maxY;
+    const g10in = c.goal10 >= minY && c.goal10 <= maxY;
+
+    // trend area + line
+    const tPts = m.trend.map(p => [X(p.x), Y(p.y)]);
+    const linePath = tPts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+    const areaPath = tPts.length > 1 ?
+      linePath + " L" + tPts[tPts.length - 1][0].toFixed(1) + " " + Y(minY).toFixed(1) + " L" + tPts[0][0].toFixed(1) + " " + Y(minY).toFixed(1) + " Z" : "";
+
+    const rawDots = m.weights.map(p =>
+      '<circle cx="' + X(p.x).toFixed(1) + '" cy="' + Y(p.y).toFixed(1) + '" r="2.6" class="raw"/>').join("");
+    const end = tPts.length ? tPts[tPts.length - 1] : null;
+    const endDot = end ? '<circle cx="' + end[0].toFixed(1) + '" cy="' + end[1].toFixed(1) + '" r="4.5" class="endpt"/>' : "";
+
+    const svg =
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Weight over time">' +
+      '<style>' +
+      '.grid{stroke:var(--border);stroke-width:1}' +
+      '.ylab{fill:var(--ink-faint);font:500 10px var(--mono);text-anchor:end;font-variant-numeric:tabular-nums}' +
+      '.xlab{fill:var(--ink-faint);font:500 10px var(--mono);text-anchor:middle}' +
+      '.goal-line{stroke:var(--good);stroke-width:1.3;stroke-dasharray:4 4;opacity:.75}' +
+      '.goal-lab{fill:var(--good);font:600 9.5px var(--sans);text-anchor:end}' +
+      '.tarea{fill:var(--accent);opacity:.09}' +
+      '.tline{fill:none;stroke:var(--accent);stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round}' +
+      '.raw{fill:var(--ink-faint);opacity:.55}' +
+      '.endpt{fill:var(--accent);stroke:var(--surface);stroke-width:2}' +
+      '.cross{stroke:var(--ink-faint);stroke-width:1;stroke-dasharray:3 3;opacity:0}' +
+      '.focus{fill:var(--accent);stroke:var(--surface);stroke-width:2;opacity:0}' +
+      '</style>' +
+      grid.join("") +
+      goalLine(Y(c.goal12), "12% · " + c.goal12.toFixed(1), g12in) +
+      goalLine(Y(c.goal10), "10% · " + c.goal10.toFixed(1), g10in) +
+      (areaPath ? '<path d="' + areaPath + '" class="tarea"/>' : "") +
+      '<path d="' + linePath + '" class="tline"/>' +
+      rawDots + endDot + xlabs +
+      '<line class="cross" id="cx" x1="0" y1="' + padT + '" x2="0" y2="' + (H - padB) + '"/>' +
+      '<circle class="focus" id="fc" r="4.5"/>' +
+      '</svg>';
+
+    box.innerHTML = svg;
+    const tip = document.createElement("div");
+    tip.className = "tooltip"; box.appendChild(tip);
+    chartCtx = { box, svg: box.querySelector("svg"), tip, W, H, X, Y, padB, weights: m.weights, trend: m.trend };
+    attachHover();
+  }
+
+  function attachHover() {
+    const cx = chartCtx; if (!cx) return;
+    const cross = cx.svg.querySelector("#cx"), foc = cx.svg.querySelector("#fc");
+    function move(ev) {
+      const rect = cx.svg.getBoundingClientRect();
+      const clientX = (ev.touches ? ev.touches[0].clientX : ev.clientX);
+      const px = (clientX - rect.left) / rect.width * cx.W;
+      let best = null, bd = 1e9;
+      cx.weights.forEach((p, i) => { const d = Math.abs(cx.X(p.x) - px); if (d < bd) { bd = d; best = i; } });
+      if (best == null) return;
+      const p = cx.weights[best], t = cx.trend[best];
+      const gx = cx.X(p.x), gy = cx.Y(p.y);
+      cross.setAttribute("x1", gx); cross.setAttribute("x2", gx); cross.style.opacity = ".9";
+      foc.setAttribute("cx", gx); foc.setAttribute("cy", gy); foc.style.opacity = "1";
+      cx.tip.style.opacity = "1";
+      cx.tip.style.left = (gx / cx.W * 100) + "%";
+      cx.tip.style.top = (gy / cx.H * 100) + "%";
+      cx.tip.innerHTML = '<span class="t-date">' + p.date + '</span><br><b>' + p.y.toFixed(1) + '</b> kg' +
+        (t ? ' · <b>' + t.y.toFixed(1) + '</b> avg' : "");
+    }
+    function leave() { cross.style.opacity = "0"; foc.style.opacity = "0"; cx.tip.style.opacity = "0"; }
+    cx.svg.addEventListener("pointermove", move);
+    cx.svg.addEventListener("pointerdown", move);
+    cx.svg.addEventListener("pointerleave", leave);
+  }
+
+  // ---------- render ----------
+  function render() {
+    const m = metrics();
+    const guards = evalGuards(m);
+    const v = verdict(m, guards);
+    const c = state.config;
+
+    // verdict hero
+    const vEl = document.getElementById("verdict");
+    const vcol = v.sev === "good" ? "var(--good)" : v.sev === "warn" ? "var(--warn)" : v.sev === "crit" ? "var(--crit)" : "var(--accent)";
+    const vsoft = v.sev === "good" ? "var(--good-soft)" : v.sev === "warn" ? "var(--warn-soft)" : v.sev === "crit" ? "var(--crit-soft)" : "var(--accent-soft)";
+    vEl.style.setProperty("--vc", vcol); vEl.style.setProperty("--vc-soft", vsoft);
+    vEl.innerHTML =
+      '<span class="vtag"><span class="dot"></span>' + v.tag + '</span>' +
+      '<div class="vmsg">' + v.msg + '</div>' +
+      '<div class="vwhy">' + v.why + '</div>';
+
+    // readouts
+    const daysIn = m.weights.length ? (dnum(m.weights[m.weights.length - 1].date) - dnum(c.startDate)) : 0;
+    const lost = m.trendWeight != null ? c.startWeight - m.trendWeight : null;
+    document.getElementById("readouts").innerHTML =
+      stat("Trend weight", fmt(m.trendWeight, 1), "kg", "7-day average", true) +
+      stat("This week", m.rate != null ? (m.rate >= 0 ? "−" : "+") + fmt(Math.abs(m.rate), 2) : "—", "kg/wk",
+        (m.rate != null ? "target −" + c.rateLo + " to −" + c.rateHi : "need more data"), false) +
+      stat("Lost so far", lost != null ? (lost >= 0 ? "" : "+") + fmt(Math.abs(lost) * (lost < 0 ? 1 : 1), 1) : "—", "kg",
+        daysIn > 0 ? "in " + daysIn + " days" : "since start", false);
+
+    // guardrails
+    document.getElementById("guardrails").innerHTML = guards.map(g => {
+      const col = sevColor(g.sev), soft = sevSoft(g.sev);
+      return '<div class="grail" style="--gc:' + col + ';--gc-soft:' + soft + '">' +
+        '<div class="gicon">' + g.icon + '</div>' +
+        '<div class="gbody"><div class="gttl">' + g.key + '</div><div class="gsub">' + g.sub + '</div></div>' +
+        '<div><div class="gstate">' + g.state + '</div><div class="gval">' + g.val + '</div></div>' +
+        '</div>';
+    }).join("");
+
+    // progress
+    renderProgress(m);
+
+    // chart
+    drawChart(m);
+
+    // log list
+    renderLog();
+  }
+
+  function stat(lbl, val, unit, cap, accent) {
+    const showUnit = val !== "—";
+    return '<div class="stat"><div class="lbl">' + lbl + '</div>' +
+      '<div class="val' + (accent ? " accent" : "") + '">' + val + (showUnit ? '<small>' + unit + '</small>' : "") + '</div>' +
+      '<div class="cap">' + cap + '</div></div>';
+  }
+
+  function renderProgress(m) {
+    const c = state.config, box = document.getElementById("progress");
+    if (m.trendWeight == null) { box.innerHTML = '<div class="chart-empty" style="padding:20px 0">Log a weigh-in to track progress.</div>'; document.getElementById("progHint").textContent = ""; return; }
+    const tw = m.trendWeight, start = c.startWeight;
+    document.getElementById("progHint").textContent = "trend " + fmt(tw, 1) + " kg";
+    function goalRow(name, pct, target) {
+      const total = start - target, done = start - tw;
+      const frac = total > 0 ? Math.max(0, Math.min(1, done / total)) : 1;
+      const toGo = tw - target;
+      const reached = toGo <= 0;
+      let eta = "";
+      if (!reached && m.rate && m.rate > 0.05) {
+        const wks = toGo / m.rate;
+        const d = new Date(Date.now() + wks * 7 * DAY);
+        eta = "≈ " + (wks < 1.2 ? Math.round(wks * 7) + " days" : fmt(wks, 1) + " wks") + " · " + d.toISOString().slice(0, 10);
+      } else if (reached) { eta = "reached"; } else { eta = "—"; }
+      return '<div class="goal' + (reached ? " done" : "") + '">' +
+        '<div class="goal-top"><div class="goal-name">' + name + ' <span>' + fmt(target, 1) + ' kg</span></div>' +
+        '<div class="goal-meta">' + (reached ? "done" : fmt(toGo, 1) + " kg to go") + '</div></div>' +
+        '<div class="bar"><i style="width:' + (frac * 100).toFixed(1) + '%"></i></div>' +
+        '<div class="goal-meta" style="margin-top:5px">' + eta + '</div></div>';
+    }
+    box.innerHTML = goalRow("12% body fat", 12, c.goal12) + goalRow("10% body fat", 10, c.goal10);
+  }
+
+  function renderLog() {
+    const es = sorted().reverse().slice(0, 14);
+    const box = document.getElementById("logList");
+    if (!es.length) { box.innerHTML = '<div class="chart-empty" style="padding:16px 0">No entries yet.</div>'; return; }
+    let html = '<div class="logrow head"><span class="h">Date</span><span class="h">Weight</span><span class="h">kcal</span><span class="h">Protein</span><span></span></div>';
+    html += es.map(e =>
+      '<div class="logrow">' +
+      '<span class="d">' + shortDate(e.date) + '</span>' +
+      '<span class="m' + (e.weight == null ? " empty" : "") + '">' + (e.weight == null ? "—" : fmt(e.weight, 1) + '<span class="u"> kg</span>') + '</span>' +
+      '<span class="m' + (e.kcal == null ? " empty" : "") + '">' + (e.kcal == null ? "—" : fmtInt(e.kcal)) + '</span>' +
+      '<span class="m' + (e.protein == null ? " empty" : "") + '">' + (e.protein == null ? "—" : fmtInt(e.protein) + '<span class="u"> g</span>') + '</span>' +
+      '<button class="del" data-date="' + e.date + '" title="Delete">×</button>' +
+      '</div>'
+    ).join("");
+    box.innerHTML = html;
+    box.querySelectorAll(".del").forEach(b => b.addEventListener("click", () => {
+      state.entries = state.entries.filter(x => x.date !== b.dataset.date); save(); render();
+    }));
+  }
+
+  // ---------- form + settings wiring ----------
+  document.getElementById("f-date").value = todayStr();
+  document.getElementById("logForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const date = document.getElementById("f-date").value; if (!date) return;
+    const num = id => { const v = document.getElementById(id).value; return v === "" ? null : +v; };
+    const w = num("f-weight"), k = num("f-kcal"), p = num("f-protein");
+    let row = state.entries.find(x => x.date === date);
+    if (!row) { row = { date, weight: null, kcal: null, protein: null }; state.entries.push(row); }
+    if (w != null) row.weight = w;
+    if (k != null) row.kcal = k;
+    if (p != null) row.protein = p;
+    save(); render();
+    document.getElementById("f-weight").value = "";
+    document.getElementById("f-kcal").value = "";
+    document.getElementById("f-protein").value = "";
+  });
+
+  const CFG_FIELDS = [
+    ["calTarget", "Calorie target"], ["rmr", "RMR floor"], ["proteinTarget", "Protein target g"],
+    ["maintenance", "Maintenance kcal"], ["rateLo", "Rate min kg/wk"], ["rateHi", "Rate max kg/wk"],
+    ["startWeight", "Start weight kg"], ["startDate", "Cut start date"],
+    ["goal12", "12% goal kg"], ["goal10", "10% goal kg"],
+    ["fatMass", "Fat mass kg (DEXA)"]
+  ];
+  function renderSettings() {
+    document.getElementById("settings").innerHTML = CFG_FIELDS.map(([k, lbl]) => {
+      const v = state.config[k];
+      const type = k === "startDate" ? "date" : "number";
+      const step = (k === "rateLo" || k === "rateHi" || k === "goal12" || k === "goal10" || k === "startWeight" || k === "fatMass") ? "0.1" : "1";
+      return '<div class="field"><label>' + lbl + '</label><input data-cfg="' + k + '" type="' + type + '" step="' + step + '" value="' + v + '"></div>';
+    }).join("");
+  }
+  document.getElementById("saveCfg").addEventListener("click", () => {
+    document.querySelectorAll("[data-cfg]").forEach(inp => {
+      const k = inp.dataset.cfg;
+      state.config[k] = k === "startDate" ? inp.value : +inp.value;
+    });
+    save(); render();
+    const b = document.getElementById("saveCfg"); b.textContent = "Saved ✓"; setTimeout(() => b.textContent = "Save targets", 1200);
+  });
+
+  document.getElementById("exportBtn").addEventListener("click", () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = "cut-tracker-" + todayStr() + ".json"; a.click();
+  });
+  document.getElementById("importBtn").addEventListener("click", () => document.getElementById("importFile").click());
+  document.getElementById("importFile").addEventListener("change", e => {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => { try { const p = JSON.parse(r.result); state = { config: Object.assign({}, DEFAULTS.config, p.config), entries: p.entries || [] }; save(); renderSettings(); render(); } catch (err) { alert("Couldn't read that backup file."); } };
+    r.readAsText(f);
+  });
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    if (confirm("Reset all data and targets to defaults? Your logged days will be cleared.")) {
+      state = JSON.parse(JSON.stringify(DEFAULTS)); save(); renderSettings(); render();
+    }
+  });
+
+  renderSettings();
+  render();
+
+  // Offline support when self-hosted (GitHub Pages). No-ops on the claude.ai
+  // artifact, whose CSP has no sw.js to serve — hence the silent catch.
+  if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator &&
+      typeof location !== 'undefined' && location.protocol === 'https:') {
+    try { navigator.serviceWorker.register('sw.js').catch(() => {}); } catch (e) {}
+  }
+})();
+</script>
