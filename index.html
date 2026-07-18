@@ -209,16 +209,21 @@
   .btn.row-add { grid-column: 1 / -1; }
   .loglist { display: flex; flex-direction: column; }
   .logrow {
-    display: grid; grid-template-columns: 78px 1fr 1fr 1fr 30px; align-items: center; gap: 8px;
-    padding: 9px 2px; border-top: 1px solid var(--border); font-size: 13px;
+    display: grid; grid-template-columns: 78px 1fr 1fr 1fr 1fr; align-items: center; gap: 8px;
+    padding: 9px 2px; font-size: 13px;
+    background: var(--surface); position: relative;
+    touch-action: pan-y; transition: transform 0.18s ease;
   }
-  .logrow:first-child { border-top: 0; }
+  .logwrap { position: relative; overflow: hidden; border-top: 1px solid var(--border); }
+  .logwrap .swipe-del {
+    position: absolute; top: 0; right: 0; bottom: 0; width: 72px; border: none;
+    background: var(--crit); color: #fff; font-size: 12px; font-weight: 600; cursor: pointer;
+  }
+  .logrow[data-date] { cursor: pointer; }
   .logrow .d { color: var(--ink-muted); font-size: 12px; }
   .logrow .m { font-family: var(--mono); font-variant-numeric: tabular-nums; }
   .logrow .m .u { color: var(--ink-faint); font-size: 10.5px; }
   .logrow .m.empty { color: var(--ink-faint); }
-  .logrow .del { background: none; border: none; color: var(--ink-faint); cursor: pointer; font-size: 16px; padding: 4px; line-height: 1; }
-  .logrow .del:hover { color: var(--crit); }
   .logrow .h { color: var(--ink-faint); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
   .logrow.head { padding-bottom: 4px; }
 
@@ -282,6 +287,7 @@
       <div class="field"><label for="f-weight">Weight kg</label><input type="number" step="0.01" inputmode="decimal" id="f-weight" placeholder="—"></div>
       <div class="field"><label for="f-kcal">kcal</label><input type="number" step="1" inputmode="numeric" id="f-kcal" placeholder="—"></div>
       <div class="field"><label for="f-protein">Protein g</label><input type="number" step="1" inputmode="numeric" id="f-protein" placeholder="—"></div>
+      <div class="field"><label for="f-steps">Steps</label><input type="number" step="1" inputmode="numeric" id="f-steps" placeholder="—"></div>
       <button class="btn row-add" type="submit">Save day</button>
     </form>
     <div class="loglist" id="logList"></div>
@@ -321,7 +327,8 @@
       startDate: "2026-06-25", startWeight: 79.4,
       goal12: 74.0, goal10: 72.2,
       fatMass: 12.7,        // kg fat (from DEXA) — sets the fat-supply ceiling
-      fatKcalPerKg: 30      // kcal/day fat can release per kg fat (12.7 × 30 ≈ 380)
+      fatKcalPerKg: 30,     // kcal/day fat can release per kg fat (12.7 × 30 ≈ 380)
+      stepsLo: 8000, stepsHi: 12000  // activity band the maintenance estimate assumes
     },
     entries: []
   };
@@ -361,6 +368,7 @@
     const weights = es.filter(e => e.weight != null).map(e => ({ x: dnum(e.date), y: +e.weight, date: e.date }));
     const cals = es.filter(e => e.kcal != null).map(e => ({ x: dnum(e.date), y: +e.kcal }));
     const prot = es.filter(e => e.protein != null).map(e => ({ x: dnum(e.date), y: +e.protein }));
+    const steps = es.filter(e => e.steps != null).map(e => ({ x: dnum(e.date), y: +e.steps }));
 
     const latest = weights.length ? weights[weights.length - 1].x : (es.length ? dnum(es[es.length - 1].date) : dnum(todayStr()));
 
@@ -383,8 +391,8 @@
 
     const win7 = arr => arr.filter(p => p.x > latest - 7);
     const avg = arr => arr.length ? arr.reduce((s, p) => s + p.y, 0) / arr.length : null;
-    const c7 = win7(cals), p7 = win7(prot);
-    const avgKcal = avg(c7), avgProt = avg(p7);
+    const c7 = win7(cals), p7 = win7(prot), s7 = win7(steps);
+    const avgKcal = avg(c7), avgProt = avg(p7), avgSteps = avg(s7);
     const minKcal = c7.length ? Math.min.apply(null, c7.map(p => p.y)) : null;
 
     // intake-based deficit (maintenance − eaten) — steadier than scale-derived,
@@ -393,8 +401,8 @@
     const intakeDef = avgKcal != null ? cfg.maintenance - avgKcal : null;
     const fatCeil = Math.round(cfg.fatMass * cfg.fatKcalPerKg);
 
-    return { es, weights, trend, trendWeight, rate, rateN, rateSpan, avgKcal, avgProt, minKcal,
-      intakeDef, fatCeil, calDays: c7.length, protDays: p7.length, latest };
+    return { es, weights, trend, trendWeight, rate, rateN, rateSpan, avgKcal, avgProt, minKcal, avgSteps,
+      intakeDef, fatCeil, calDays: c7.length, protDays: p7.length, stepDays: s7.length, latest };
   }
 
   // ---------- guardrail evaluation ----------
@@ -461,6 +469,19 @@
       g.push({ key: "Protein", val, sev, state: state_, sub, icon: sevIcon(sev) });
     })();
 
+    // 6. Activity — calibration check on the maintenance estimate, NOT a
+    // calorie input (device burn numbers are too noisy to enter the math).
+    // Warn-only and last in order: at equal severity every other card outranks it.
+    (function () {
+      let sev, state_, sub, val = m.avgSteps != null ? fmtInt(m.avgSteps) : "—";
+      const band = fmtInt(c.stepsLo) + "–" + fmtInt(c.stepsHi);
+      if (m.avgSteps == null) { sev = "none"; state_ = "No data"; sub = "Your " + fmtInt(c.maintenance) + " kcal maintenance assumes ~" + band + " steps/day. Import steps to check the assumption holds."; }
+      else if (m.avgSteps < c.stepsLo) { sev = "warn"; state_ = "Low movement"; sub = "Averaging " + fmtInt(m.avgSteps) + " vs your " + band + " baseline — true maintenance is lower than " + fmtInt(c.maintenance) + ", so the same intake cuts slower. Walk more or expect the trend to reflect it."; }
+      else if (m.avgSteps > c.stepsHi) { sev = "warn"; state_ = "High movement"; sub = "Averaging " + fmtInt(m.avgSteps) + " vs your " + band + " baseline — the real deficit is bigger than planned. If this is the new normal (trip, job), raise maintenance in settings."; }
+      else { sev = "good"; state_ = "Calibrated"; sub = "Movement matches the " + band + " steps/day your maintenance estimate assumes. The calorie math holds."; }
+      g.push({ key: "Activity", val, sev, state: state_, sub, icon: sevIcon(sev) });
+    })();
+
     return g;
   }
 
@@ -498,6 +519,9 @@
     if (g.key === "Muscle risk") return "Deficit is stretching what fat can cover.";
     if (g.key === "Protein") return "Protein's just short of your floor.";
     if (g.key === "Energy floor") return "A day ran close to your floor.";
+    if (g.key === "Activity") return g.state === "Low movement"
+      ? "Steps are down — the same intake cuts slower than planned."
+      : "Steps are up — the deficit is running bigger than planned.";
     return g.state;
   }
 
@@ -696,20 +720,74 @@
     const es = sorted().reverse().slice(0, 14);
     const box = document.getElementById("logList");
     if (!es.length) { box.innerHTML = '<div class="chart-empty" style="padding:16px 0">No entries yet.</div>'; return; }
-    let html = '<div class="logrow head"><span class="h">Date</span><span class="h">Weight</span><span class="h">kcal</span><span class="h">Protein</span><span></span></div>';
+    let html = '<div class="logrow head"><span class="h">Date</span><span class="h">Weight</span><span class="h">kcal</span><span class="h">Protein</span><span class="h">Steps</span></div>';
     html += es.map(e =>
-      '<div class="logrow">' +
+      '<div class="logwrap">' +
+      '<button class="swipe-del" data-date="' + e.date + '">Delete</button>' +
+      '<div class="logrow" data-date="' + e.date + '">' +
       '<span class="d">' + shortDate(e.date) + '</span>' +
       '<span class="m' + (e.weight == null ? " empty" : "") + '">' + (e.weight == null ? "—" : fmt(e.weight, 1) + '<span class="u"> kg</span>') + '</span>' +
       '<span class="m' + (e.kcal == null ? " empty" : "") + '">' + (e.kcal == null ? "—" : fmtInt(e.kcal)) + '</span>' +
       '<span class="m' + (e.protein == null ? " empty" : "") + '">' + (e.protein == null ? "—" : fmtInt(e.protein) + '<span class="u"> g</span>') + '</span>' +
-      '<button class="del" data-date="' + e.date + '" title="Delete">×</button>' +
-      '</div>'
+      '<span class="m' + (e.steps == null ? " empty" : "") + '">' + (e.steps == null ? "—" : fmtInt(e.steps)) + '</span>' +
+      '</div></div>'
     ).join("");
     box.innerHTML = html;
-    box.querySelectorAll(".del").forEach(b => b.addEventListener("click", () => {
+    box.querySelectorAll(".swipe-del").forEach(b => b.addEventListener("click", () => {
       state.entries = state.entries.filter(x => x.date !== b.dataset.date); save(); render();
     }));
+    box.querySelectorAll(".logrow[data-date]").forEach(attachRowGestures);
+  }
+
+  // Swipe a row left to reveal Delete (two-step, so no accidental deletes);
+  // a plain tap loads the day back into the form for editing.
+  let openRow = null;
+  function closeOpenRow() {
+    if (openRow) { openRow.style.transform = ""; openRow = null; }
+  }
+  function attachRowGestures(row) {
+    const OPEN = -76;
+    let sx = 0, sy = 0, dx = 0, dragging = false, horiz = null;
+    row.addEventListener("pointerdown", ev => {
+      sx = ev.clientX; sy = ev.clientY; dx = row === openRow ? OPEN : 0;
+      dragging = true; horiz = null;
+    });
+    row.addEventListener("pointermove", ev => {
+      if (!dragging) return;
+      const mx = ev.clientX - sx, my = ev.clientY - sy;
+      if (horiz == null && (Math.abs(mx) > 8 || Math.abs(my) > 8)) horiz = Math.abs(mx) > Math.abs(my);
+      if (!horiz) return;
+      dx = Math.max(OPEN - 16, Math.min(0, mx + (row === openRow ? OPEN : 0)));
+      row.style.transform = "translateX(" + dx + "px)";
+    });
+    const settle = () => {
+      if (!dragging) return false;
+      dragging = false;
+      if (horiz) {
+        if (dx < OPEN / 2) {
+          if (openRow && openRow !== row) closeOpenRow();
+          openRow = row; row.style.transform = "translateX(" + OPEN + "px)";
+        } else {
+          row.style.transform = "";
+          if (openRow === row) openRow = null;
+        }
+        return false;
+      }
+      return true; // it was a tap
+    };
+    row.addEventListener("pointerup", () => {
+      if (!settle()) return;
+      if (openRow) { closeOpenRow(); return; }   // tap anywhere closes an open row
+      const e = state.entries.find(x => x.date === row.dataset.date);
+      if (!e) return;
+      document.getElementById("f-date").value = e.date;
+      document.getElementById("f-weight").value = e.weight == null ? "" : e.weight;
+      document.getElementById("f-kcal").value = e.kcal == null ? "" : e.kcal;
+      document.getElementById("f-protein").value = e.protein == null ? "" : e.protein;
+      document.getElementById("f-steps").value = e.steps == null ? "" : e.steps;
+      document.getElementById("logForm").scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    row.addEventListener("pointercancel", settle);
   }
 
   // ---------- form + settings wiring ----------
@@ -718,16 +796,18 @@
     e.preventDefault();
     const date = document.getElementById("f-date").value; if (!date) return;
     const num = id => { const v = document.getElementById(id).value; return v === "" ? null : +v; };
-    const w = num("f-weight"), k = num("f-kcal"), p = num("f-protein");
+    const w = num("f-weight"), k = num("f-kcal"), p = num("f-protein"), s = num("f-steps");
     let row = state.entries.find(x => x.date === date);
-    if (!row) { row = { date, weight: null, kcal: null, protein: null }; state.entries.push(row); }
+    if (!row) { row = { date, weight: null, kcal: null, protein: null, steps: null }; state.entries.push(row); }
     if (w != null) row.weight = w;
     if (k != null) row.kcal = k;
     if (p != null) row.protein = p;
+    if (s != null) row.steps = s;
     save(); render();
     document.getElementById("f-weight").value = "";
     document.getElementById("f-kcal").value = "";
     document.getElementById("f-protein").value = "";
+    document.getElementById("f-steps").value = "";
   });
 
   const CFG_FIELDS = [
@@ -735,7 +815,8 @@
     ["maintenance", "Maintenance kcal"], ["rateLo", "Rate min kg/wk"], ["rateHi", "Rate max kg/wk"],
     ["startWeight", "Start weight kg"], ["startDate", "Cut start date"],
     ["goal12", "12% goal kg"], ["goal10", "10% goal kg"],
-    ["fatMass", "Fat mass kg (DEXA)"]
+    ["fatMass", "Fat mass kg (DEXA)"],
+    ["stepsLo", "Steps baseline min"], ["stepsHi", "Steps baseline max"]
   ];
   function renderSettings() {
     document.getElementById("settings").innerHTML = CFG_FIELDS.map(([k, lbl]) => {
@@ -789,9 +870,10 @@
         date: m[1],
         weight: num(r.weight, 20, 400),
         kcal: num(r.kcal != null ? r.kcal : r.calories, 0, 10000),
-        protein: num(r.protein, 0, 500)
+        protein: num(r.protein, 0, 500),
+        steps: num(r.steps, 0, 100000)
       };
-      if (row.weight != null || row.kcal != null || row.protein != null) out.push(row);
+      if (row.weight != null || row.kcal != null || row.protein != null || row.steps != null) out.push(row);
     }
     return out;
   }
@@ -799,10 +881,11 @@
   function mergeHealthRows(rows) {
     for (const r of rows) {
       let row = state.entries.find(x => x.date === r.date);
-      if (!row) { row = { date: r.date, weight: null, kcal: null, protein: null }; state.entries.push(row); }
+      if (!row) { row = { date: r.date, weight: null, kcal: null, protein: null, steps: null }; state.entries.push(row); }
       if (r.weight != null) row.weight = r.weight;
       if (r.kcal != null) row.kcal = r.kcal;
       if (r.protein != null) row.protein = r.protein;
+      if (r.steps != null) row.steps = r.steps;
     }
     if (rows.length) { save(); render(); }
     return rows.length;

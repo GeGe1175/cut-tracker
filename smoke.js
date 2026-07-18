@@ -77,6 +77,15 @@ setTimeout(() => {
     row && row.weight === 76.2 && row.kcal === 2250 && row.protein === 162,
     JSON.stringify(row));
 
+  // 5. low-step week warns that the calorie math is miscalibrated
+  // (import overwrote the under-eating day, so everything else reads good)
+  $("f-kcal").value = "2300"; $("f-date").value = today; $("logForm")._fire("submit");
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(day0 - i * 86400000).toISOString().slice(0, 10);
+    $("f-date").value = d; $("f-steps").value = "3000"; $("logForm")._fire("submit");
+  }
+  expect("low steps flag miscalibration", /steps are down|low movement/i.test(strip(rendered["verdict"])), strip(rendered["verdict"]));
+
   console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL PASS");
   process.exit(failures ? 1 : 0);
 }, 10);

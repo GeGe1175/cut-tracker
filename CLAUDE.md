@@ -10,14 +10,16 @@ Personal single-user app for Jeff: cut fat, keep muscle. Everything lives in `in
 ## What the app does
 - Daily log (date / weight kg / kcal / protein g) → localStorage under key `cutTracker.v1`. Partial entries fine; fields merge per date.
 - Trend chart: raw weigh-ins as faint dots, 7-day trailing average as the line, dashed goal lines at 12% (74 kg) and 10% (72.2 kg).
-- Five guardrails over the last 7 logged days, worst one becomes the headline verdict:
+- Daily log rows: tap to load a day back into the form for editing (same-date submit merges non-null fields); swipe left to reveal Delete (two-step on purpose — the old always-visible × was too easy to fat-finger).
+- Six guardrails over the last 7 logged days, worst one becomes the headline verdict:
   1. **Loss rate** — target band 0.5–0.7 kg/wk; >1.0 is crit.
   2. **Eating your target** — flags *under*-eating vs the 2,300 kcal target. This is the app's reason to exist: Jeff once averaged ~1,700 vs a 2,300 target and lost serious strength (weighted dips 40 kg → bodyweight). Under-target must always be at least as loud as over-target.
   3. **Energy floor** — any single day below RMR (1,964) is crit.
   4. **Muscle risk** — intake-based deficit (maintenance − avg kcal) vs fat-supply ceiling (fatMass × 30 kcal/kg/day ≈ 381).
   5. **Protein** — ≥160 g/day.
+  6. **Activity** — 7-day avg steps vs the 8k–12k band the maintenance estimate assumes. Warn-only (never crit) and deliberately LAST in order: it's a calibration check on the calorie math, not a compliance target, and steps must never enter the deficit calculation (device burn numbers are 20–30% noise — the scale trend is the real expenditure meter).
 - Progress bars to both goals with ETA from current rate; settings panel (all targets editable); JSON export/import.
-- **Import from Health**: reads clipboard JSON put there by Jeff's iOS Shortcut (`{"date":"yyyy-mm-dd","weight":"76.2 kg","kcal":"2,250 kcal","protein":"162 g"}`, single object or array). Units/commas stripped; zero kcal/protein skipped (zero = "no Health samples", importing it would fabricate a crit under-eating day). Merges per date like manual entry. This is the stepping stone to a Capacitor+HealthKit native app (Jeff's stated goal) — keep the parse/merge split so native can reuse it.
+- **Import from Health**: reads clipboard JSON put there by Jeff's iOS Shortcut (`{"date":"yyyy-mm-dd","weight":"76.2 kg","kcal":"2,250 kcal","protein":"162 g","steps":"9,800"}`, single object or array). Units/commas stripped; zero kcal/protein skipped (zero = "no Health samples", importing it would fabricate a crit under-eating day). Merges per date like manual entry. This is the stepping stone to a Capacitor+HealthKit native app (Jeff's stated goal) — keep the parse/merge split so native can reuse it.
 
 ## Non-obvious design decisions (don't silently reverse)
 - **Loss rate = linear regression** over the last 21 days of weigh-ins, widening to all data when the window has <2 points or <7 days span. Never day-to-day deltas — daily swings are glycogen/water.
