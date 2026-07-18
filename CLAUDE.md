@@ -2,9 +2,10 @@
 
 Personal single-user app for Jeff: cut fat, keep muscle. Everything lives in `index.html` (markup + CSS + ~400 lines vanilla JS). No framework, no build step, no backend — this is deliberate; don't introduce tooling unless Jeff asks for a capability that needs it (device sync, API imports).
 
-## Published artifact
-Live at https://claude.ai/code/artifact/9490127c-1f5e-46e8-9312-84ba30e07094 (Jeff uses this on his phone).
-To update it after editing `index.html`: call the Artifact tool with this file's path AND `url` set to that link — without `url`, a new conversation mints a different URL. Keep favicon 🎯 and title "Cut Tracker".
+## Where it's published
+**Primary (Jeff's phone): GitHub Pages** — https://gege1175.github.io/cut-tracker/ (repo `GeGe1175/cut-tracker`, Pages serves `main` at `/`). Deploy = `git push`. Installed as a home-screen PWA (manifest + apple meta tags + `sw.js` network-first service worker for offline). Jeff still needs to migrate his log from the artifact origin (Export backup there → Import here); until confirmed, his real data is on the artifact origin below.
+
+**Legacy: claude.ai artifact** at https://claude.ai/code/artifact/9490127c-1f5e-46e8-9312-84ba30e07094 — kept as a fallback; claude.ai wraps it in its own page (iframe), so PWA tags can't work there and the manifest/icon/sw requests silently fail (harmless, guarded). To update it: call the Artifact tool with `index.html`'s path AND `url` set to that link — without `url`, a new conversation mints a different URL. Keep favicon 🎯 and title "Cut Tracker".
 
 ## What the app does
 - Daily log (date / weight kg / kcal / protein g) → localStorage under key `cutTracker.v1`. Partial entries fine; fields merge per date.
@@ -33,7 +34,7 @@ Upcoming: 2-week Japan trip at maintenance (~2,800) — if he mentions it, that'
 `npm test` runs `smoke.js`: boots the script under a minimal DOM shim, simulates two weeks of on-plan logging, then an under-eating day, and asserts the verdicts ("On track" → "under-eating"). Extend it when adding guardrails. There's no browser automation here; for visual checks, open `index.html` (or `npm run dev` → localhost:8000).
 
 ## Gotchas
-- localStorage is per-origin: file://, localhost, and the artifact URL hold separate data. Jeff's real data likely lives on the artifact origin.
+- localStorage is per-origin: file://, localhost, GitHub Pages, and the artifact URL hold separate data. Jeff's real data belongs on the GitHub Pages origin (migration from the artifact via Export/Import was pending as of 2026-07-19 — confirm it happened before assuming).
 - Storage key is `cutTracker.v1`. If you change the data shape, migrate on load — don't bump the key and orphan his log.
 - The page is published as an artifact: strict CSP, no external requests, so it must stay fully self-contained (it already is — keep it that way).
 - File starts with `<title>` directly (no doctype/html/head/body) because the Artifact tool wraps it; browsers handle it fine locally too.
