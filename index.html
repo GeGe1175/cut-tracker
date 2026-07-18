@@ -241,6 +241,13 @@
   .logrow .h { color: var(--ink-faint); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
   .logrow.head { padding-bottom: 4px; }
 
+  .logmore {
+    width: 100%; margin-top: 8px; padding: 9px; border: none; background: none; cursor: pointer;
+    font-family: var(--sans); font-size: 12px; font-weight: 600; color: var(--ink-muted);
+    border-top: 1px solid var(--border); border-radius: 0;
+  }
+  .logmore:hover { color: var(--ink); }
+
   details.settings summary { cursor: pointer; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); list-style: none; }
   details.settings summary::-webkit-details-marker { display: none; }
   details.settings summary::after { content: "  ⌄"; color: var(--ink-faint); }
@@ -742,8 +749,10 @@
     box.innerHTML = goalRow("12% body fat", 12, c.goal12) + goalRow("10% body fat", 10, c.goal10);
   }
 
+  let showAllLog = false;
   function renderLog() {
-    const es = sorted().reverse().slice(0, 14);
+    const all = sorted().reverse();
+    const es = showAllLog ? all : all.slice(0, 14);
     const box = document.getElementById("logList");
     if (!es.length) { box.innerHTML = '<div class="chart-empty" style="padding:16px 0">No entries yet.</div>'; return; }
     let html = '<div class="logrow head"><span class="h">Date</span><span class="h">Weight</span><span class="h">kcal</span><span class="h">Protein</span><span class="h">Steps</span></div>';
@@ -758,7 +767,14 @@
       '<span class="m' + (e.steps == null ? " empty" : "") + '">' + (e.steps == null ? "—" : fmtInt(e.steps)) + '</span>' +
       '</div></div>'
     ).join("");
+    if (all.length > 14) {
+      html += '<button class="logmore" type="button">' +
+        (showAllLog ? "Show recent 14 days" : "Show all " + all.length + " days") + '</button>';
+    }
     box.innerHTML = html;
+    box.querySelectorAll(".logmore").forEach(b => b.addEventListener("click", () => {
+      showAllLog = !showAllLog; renderLog();
+    }));
     box.querySelectorAll(".swipe-del").forEach(b => b.addEventListener("click", () => {
       state.entries = state.entries.filter(x => x.date !== b.dataset.date); save(); render();
     }));
