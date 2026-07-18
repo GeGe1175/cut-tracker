@@ -144,6 +144,7 @@
     color: var(--ink-faint); text-transform: uppercase; text-align: center;
   }
   .vseg.hot span { color: var(--sc); }
+  .vseg { cursor: pointer; }
 
   /* ---- Readouts row ---- */
   .readouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -181,6 +182,17 @@
 
   /* ---- Chart ---- */
   .chart-card { padding-bottom: 12px; }
+  .chips { display: flex; gap: 4px; }
+  .chip {
+    border: 1px solid var(--border); background: none; color: var(--ink-muted); cursor: pointer;
+    font-family: var(--sans); font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 999px; width: auto;
+  }
+  .chip.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; padding: 0 2px; font-size: 11px; color: var(--ink-muted); }
+  .legend .lg { display: inline-flex; align-items: center; gap: 5px; }
+  .lg-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-faint); opacity: .7; }
+  .lg-line { width: 14px; height: 3px; border-radius: 2px; background: var(--accent); }
+  .lg-goal { width: 14px; height: 0; border-top: 2px dashed var(--good); }
   #chart { position: relative; width: 100%; }
   #chart svg { width: 100%; height: auto; display: block; touch-action: none; }
   .chart-empty { color: var(--ink-faint); font-size: 13px; text-align: center; padding: 42px 10px; line-height: 1.5; }
@@ -287,9 +299,18 @@
   <section class="card chart-card">
     <div class="card-head">
       <h2>Weight trend</h2>
-      <span class="hint">daily · 7-day average</span>
+      <div class="chips" id="rangeChips">
+        <button class="chip" data-range="4w" type="button">4w</button>
+        <button class="chip" data-range="12w" type="button">12w</button>
+        <button class="chip" data-range="all" type="button">All</button>
+      </div>
     </div>
     <div id="chart"></div>
+    <div class="legend">
+      <span class="lg"><i class="lg-dot"></i>daily weigh-in</span>
+      <span class="lg"><i class="lg-line"></i>7-day average</span>
+      <span class="lg"><i class="lg-goal"></i>goal</span>
+    </div>
   </section>
 
   <section>
@@ -353,7 +374,8 @@
       goal12: 74.0, goal10: 72.2,
       fatMass: 12.7,        // kg fat (from DEXA) — sets the fat-supply ceiling
       fatKcalPerKg: 30,     // kcal/day fat can release per kg fat (12.7 × 30 ≈ 380)
-      stepsLo: 8000, stepsHi: 12000  // activity band the maintenance estimate assumes
+      stepsLo: 8000, stepsHi: 12000, // activity band the maintenance estimate assumes
+      chartRange: "all"              // chart display window: 4w | 12w | all (display only — regression unaffected)
     },
     entries: []
   };
@@ -555,11 +577,20 @@
   function drawChart(m) {
     const box = document.getElementById("chart");
     box.querySelectorAll(".tooltip").forEach(n => n.remove());
+    const c = state.config;
+    // display window only — the regression and averages always use full data
+    const span = { "4w": 28, "12w": 84 }[c.chartRange] || null;
+    const cutoff = span ? m.latest - span : -Infinity;
+    m = Object.assign({}, m, {
+      weights: m.weights.filter(p => p.x > cutoff),
+      trend: m.trend.filter(p => p.x > cutoff)
+    });
     if (m.weights.length < 1) {
-      box.innerHTML = '<div class="chart-empty">No weigh-ins yet.<br>Log a few days and your trend line appears here.</div>';
+      box.innerHTML = '<div class="chart-empty">' + (span
+        ? "No weigh-ins in this window.<br>Switch to All to see your full history."
+        : "No weigh-ins yet.<br>Log a few days and your trend line appears here.") + '</div>';
       chartCtx = null; return;
     }
-    const c = state.config;
     const W = 660, H = 250, padL = 34, padR = 14, padT = 14, padB = 26;
     const xs = m.weights.map(p => p.x);
     let minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
@@ -674,7 +705,7 @@
     const vcol = v.sev === "good" ? "var(--good)" : v.sev === "warn" ? "var(--warn)" : v.sev === "crit" ? "var(--crit)" : "var(--accent)";
     const vsoft = v.sev === "good" ? "var(--good-soft)" : v.sev === "warn" ? "var(--warn-soft)" : v.sev === "crit" ? "var(--crit-soft)" : "var(--accent-soft)";
     vEl.style.setProperty("--vc", vcol); vEl.style.setProperty("--vc-soft", vsoft);
-    const SEG_LABELS = ["Rate", "Eat", "Floor", "Fuel", "Prot", "Move"];
+    const SEG_LABELS = ["Rate", "Kcal", "Floor", "Muscle", "Protein", "Steps"];
     vEl.innerHTML =
       '<span class="vtag"><span class="dot"></span>' + v.tag + '</span>' +
       '<div class="vmsg">' + v.msg + '</div>' +
@@ -682,6 +713,15 @@
       '<div class="vstrip">' + guards.map((g, i) =>
         '<div class="vseg' + (g.sev === "warn" || g.sev === "crit" ? " hot" : "") + '" style="--sc:' + sevColor(g.sev) + '">' +
         '<i></i><span>' + SEG_LABELS[i] + '</span></div>').join("") + '</div>';
+    // tap a segment → jump to its guardrail card
+    vEl.querySelectorAll(".vseg").forEach((s, i) => s.addEventListener("click", () => {
+      const card = document.querySelectorAll(".grail")[i];
+      if (card && card.scrollIntoView) card.scrollIntoView({ behavior: "smooth", block: "center" });
+    }));
+
+    // chart range chips
+    document.querySelectorAll("#rangeChips .chip").forEach(b =>
+      b.classList.toggle("on", (c.chartRange || "all") === b.dataset.range));
 
     // day counter (from cut start, not from first log)
     const dayN = dnum(todayStr()) - dnum(c.startDate) + 1;
@@ -944,6 +984,12 @@
       const n = mergeHealthRows(parseHealthImport(t));
       done(n ? "Imported " + n + " day" + (n === 1 ? "" : "s") + " ✓" : "No Health data on clipboard");
     }).catch(() => done("Paste not allowed"));
+  });
+
+  document.getElementById("rangeChips").addEventListener("click", ev => {
+    const b = ev.target && ev.target.closest ? ev.target.closest(".chip") : null;
+    if (!b) return;
+    state.config.chartRange = b.dataset.range; save(); render();
   });
 
   document.getElementById("resetBtn").addEventListener("click", () => {

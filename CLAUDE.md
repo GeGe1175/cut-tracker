@@ -9,7 +9,7 @@ Personal single-user app for Jeff: cut fat, keep muscle. Everything lives in `in
 
 ## What the app does
 - Daily log (date / weight kg / kcal / protein g) → localStorage under key `cutTracker.v1`. Partial entries fine; fields merge per date.
-- Trend chart: raw weigh-ins as faint dots, 7-day trailing average as the line, dashed goal lines at 12% (74 kg) and 10% (72.2 kg).
+- Trend chart: raw weigh-ins as faint dots, 7-day trailing average as the line, dashed goal lines at 12% (74 kg) and 10% (72.2 kg). Mark legend below; 4w/12w/All range chips (`config.chartRange`) window the *display only* — regression and averages always use full data.
 - Daily log rows: tap to load a day back into the form for editing (same-date submit merges non-null fields); swipe left to reveal Delete (two-step on purpose — the old always-visible × was too easy to fat-finger).
 - Six guardrails over the last 7 logged days, worst one becomes the headline verdict:
   1. **Loss rate** — target band 0.5–0.7 kg/wk; >1.0 is crit.
@@ -27,7 +27,7 @@ Personal single-user app for Jeff: cut fat, keep muscle. Everything lives in `in
 - **Muscle-risk bands are deliberately loose** (good ≤ ceiling+200, warn to +450, crit beyond): Jeff's *planned* 500 kcal deficit slightly exceeds the ~381 fat ceiling. If on-plan reads yellow forever, the signal dies. Keep "on-plan = green".
 - Verdict priority is crit > warn > good, first match in guardrail order — deliberate, so under-eating outranks everything else at equal severity.
 - Weekly averages over daily numbers, everywhere, in every message shown to Jeff.
-- **Visual identity** (2026-07 pass): "clinical instrument" — cool grey-blue neutrals, tabular mono numerals, severity colors. Wordmark + day counter use Avenir Next Condensed via `--display` (ships on Apple platforms; no font files — CSP). The signature element is the six-segment strip in the verdict hero (RATE·EAT·FLOOR·FUEL·PROT·MOVE), one tick per guardrail in card order — it exists to make the "verdict = worst of six" logic visible; don't decorate it or reorder it away from the guardrail order.
+- **Visual identity** (2026-07 pass): "clinical instrument" — cool grey-blue neutrals, tabular mono numerals, severity colors. Wordmark + day counter use Avenir Next Condensed via `--display` (ships on Apple platforms; no font files — CSP). The signature element is the six-segment strip in the verdict hero (RATE·KCAL·FLOOR·MUSCLE·PROTEIN·STEPS — plain words; Jeff couldn't parse cuter abbreviations), one tick per guardrail in card order, tap scrolls to the card — it exists to make the "verdict = worst of six" logic visible; don't decorate it or reorder it away from the guardrail order.
 
 ## Jeff's numbers (defaults baked into `DEFAULTS.config`)
 RMR 1,964 (hard floor) · cut target 2,300 · maintenance ~2,800 · protein 160 g · rate band 0.5–0.7 kg/wk · cut start 2026-06-25 @ 79.4 kg · goals 74.0 (12%) / 72.2 kg (10%) · fat mass 12.7 kg (June 2026 DEXA). If Jeff reports a new DEXA, update these defaults AND remind him to change the settings panel (localStorage config overrides defaults for existing users).
