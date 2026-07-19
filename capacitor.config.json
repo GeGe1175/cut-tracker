@@ -2,10 +2,6 @@
   "appId": "io.github.gege1175.cuttracker",
   "appName": "Cut Tracker",
   "webDir": "www",
-  "server": {
-    "url": "https://gege1175.github.io/cut-tracker/",
-    "allowNavigation": ["gege1175.github.io"]
-  },
   "ios": {
     "contentInset": "automatic"
   },
