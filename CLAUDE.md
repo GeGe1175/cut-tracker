@@ -22,6 +22,8 @@ Personal single-user app for Jeff: cut fat, keep muscle. Everything lives in `in
 - Progress bars to both goals with ETA from current rate; settings panel (all targets editable); JSON export/import.
 - **Import from Health**: reads clipboard JSON put there by Jeff's iOS Shortcut (`{"date":"yyyy-mm-dd","weight":"76.2 kg","kcal":"2,250 kcal","protein":"162 g","steps":"9,800"}`, single object or array). Units/commas stripped; zero kcal/protein skipped (zero = "no Health samples", importing it would fabricate a crit under-eating day). Merges per date like manual entry. This is the stepping stone to a Capacitor+HealthKit native app (Jeff's stated goal) — keep the parse/merge split so native can reuse it.
 
+- **Coach's report (AI analysis)**: button builds a compact JSON of targets/trend/guardrails/strength/last-14-days and asks `claude-opus-4-8` (raw fetch to api.anthropic.com with `anthropic-dangerous-direct-browser-access`; no sampling params — they 400 on Opus 4.8). Jeff's API key lives in localStorage `cutTracker.apiKey`, deliberately OUTSIDE state so exports/backups never contain it. No key → the same prompt is copied to the clipboard for pasting into the Claude app. Won't work on the artifact origin (CSP) — GitHub Pages only.
+
 ## Non-obvious design decisions (don't silently reverse)
 - **Loss rate = linear regression** over the last 21 days of weigh-ins, widening to all data when the window has <2 points or <7 days span. Never day-to-day deltas — daily swings are glycogen/water.
 - **Muscle risk uses the intake deficit, not the scale-derived one.** Early-cut water/glycogen losses make kg-on-the-scale × 7,700 kcal wildly overstate the true deficit and would contradict the other cards.

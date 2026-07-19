@@ -271,6 +271,9 @@
   }
   .logmore:hover { color: var(--ink); }
 
+  .ai-out { white-space: pre-wrap; font-size: 13.5px; line-height: 1.55; margin-bottom: 12px; }
+  .ai-out:empty { display: none; }
+
   details.settings summary { cursor: pointer; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); list-style: none; }
   details.settings summary::-webkit-details-marker { display: none; }
   details.settings summary::after { content: "  ⌄"; color: var(--ink-faint); }
@@ -359,6 +362,16 @@
       <button class="btn row-add" id="saveSet" type="submit">Save set</button>
     </form>
     <div id="liftList"></div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Coach's report</h2><span class="hint">AI read of your last two weeks</span></div>
+    <div id="aiOut" class="ai-out"></div>
+    <button class="btn ghost" id="aiBtn" type="button">Analyze my week</button>
+    <div class="field" style="margin-top:10px">
+      <label for="aiKey">Anthropic API key — optional; stays on this device, never included in backups</label>
+      <input type="password" id="aiKey" placeholder="sk-ant-… (without one, the button copies a prompt for the Claude app)">
+    </div>
   </section>
 
   <details class="card settings">
@@ -1111,6 +1124,97 @@
     const b = ev.target && ev.target.closest ? ev.target.closest(".chip") : null;
     if (!b) return;
     state.config.chartRange = b.dataset.range; save(); render();
+  });
+
+  // ---------- AI weekly analysis (Coach's report) ----------
+  // API key lives under its own localStorage key, NOT in state — so it never
+  // rides along in exports/backups. Without a key, the button copies the same
+  // prompt to the clipboard for pasting into the Claude app (zero-cost path).
+  const AI_KEY = "cutTracker.apiKey";
+  const AI_SYSTEM =
+    "You are an evidence-based coach reviewing a lifter's fat-loss cut. Context you must respect: " +
+    "muscle preservation outranks loss speed; the lifter's historical failure mode is UNDER-eating " +
+    "(a previous cut at ~600 kcal under target cost severe strength loss), so treat under-target intake " +
+    "as more dangerous than over-target; judge weekly averages, never single days (daily scale moves are " +
+    "water/glycogen); the loss-rate figure comes from a 21-day regression; steps calibrate the maintenance " +
+    "estimate but never enter the deficit math; strength e1RM holding is the ground truth that muscle is staying. " +
+    "Write plain text only, no markdown syntax. At most 160 words: 3-5 insights as lines starting with a bullet, " +
+    "most important first, each interpreting the data (never just restating it), with specific numbers. " +
+    "End with at most two concrete actions for the coming week. No flattery, no hedging boilerplate.";
+
+  function buildAnalysisPrompt() {
+    const m = metrics(), guards = evalGuards(m), c = state.config;
+    const data = {
+      day_of_cut: dnum(todayStr()) - dnum(c.startDate) + 1,
+      targets: {
+        kcal: c.calTarget, rmr_floor: c.rmr, maintenance_estimate: c.maintenance,
+        protein_g: c.proteinTarget, rate_band_kg_wk: [c.rateLo, c.rateHi],
+        goal_weights_kg: [c.goal12, c.goal10], fat_mass_kg_dexa: c.fatMass,
+        steps_baseline: [c.stepsLo, c.stepsHi]
+      },
+      current: { start_kg: c.startWeight, trend_kg: m.trendWeight, rate_kg_wk: m.rate,
+        avg_kcal_7d: m.avgKcal, avg_protein_7d: m.avgProt, avg_steps_7d: m.avgSteps },
+      guardrails: guards.map(g => ({ name: g.key, status: g.state, severity: g.sev, value: g.val })),
+      strength: strengthStats().filter(s => s.n > 0).map(s =>
+        ({ lift: s.name, sets_logged: s.n, best_e1rm: Math.round(s.best),
+           recent_vs_best: s.ratio != null ? Math.round(s.ratio * 100) + "%" : "baseline only" })),
+      last_14_days: sorted().slice(-14)
+    };
+    return "My cut-tracking data:\n" + JSON.stringify(data) + "\nAnalyze my week.";
+  }
+
+  document.getElementById("aiKey").value = (function () { try { return localStorage.getItem(AI_KEY) || ""; } catch (e) { return ""; } })();
+  document.getElementById("aiKey").addEventListener("change", ev => {
+    try { localStorage.setItem(AI_KEY, ev.target.value.trim()); } catch (e) {}
+  });
+
+  document.getElementById("aiBtn").addEventListener("click", () => {
+    const btn = document.getElementById("aiBtn"), out = document.getElementById("aiOut");
+    let key = "";
+    try { key = localStorage.getItem(AI_KEY) || ""; } catch (e) {}
+    const prompt = buildAnalysisPrompt();
+
+    if (!key) {
+      // zero-cost path: hand the prompt to the Claude app via clipboard
+      if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(AI_SYSTEM + "\n\n" + prompt)
+          .then(() => { out.textContent = "Prompt copied. Paste it into the Claude app for your analysis — or add an API key below to get it right here."; })
+          .catch(() => { out.textContent = "Couldn't copy. Add an API key below to analyze in-app."; });
+      } else {
+        out.textContent = "Add an API key below to analyze in-app.";
+      }
+      return;
+    }
+
+    btn.disabled = true; out.textContent = "Analyzing…";
+    fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-opus-4-8",
+        max_tokens: 1024,
+        system: AI_SYSTEM,
+        messages: [{ role: "user", content: prompt }]
+      })
+    }).then(r => r.json()).then(res => {
+      btn.disabled = false;
+      if (res.type === "error") {
+        out.textContent = "Error: " + (res.error && res.error.message || "request failed") +
+          (res.error && res.error.type === "authentication_error" ? " — check the API key below." : "");
+        return;
+      }
+      if (res.stop_reason === "refusal") { out.textContent = "The model declined this request — try again."; return; }
+      const text = (res.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
+      out.textContent = text || "No analysis returned — try again.";
+    }).catch(() => {
+      btn.disabled = false;
+      out.textContent = "Couldn't reach the AI service — check your connection (this feature needs the GitHub Pages version, not the claude.ai artifact).";
+    });
   });
 
   document.getElementById("resetBtn").addEventListener("click", () => {
