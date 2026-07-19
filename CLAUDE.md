@@ -9,7 +9,7 @@ Personal single-user app for Jeff: cut fat, keep muscle. Everything lives in `in
 
 ## What the app does
 - Daily log (date / weight kg / kcal / protein g) → localStorage under key `cutTracker.v1`. Partial entries fine; fields merge per date.
-- Trend chart: raw weigh-ins as faint dots, 7-day trailing average as the line, dashed goal lines at 12% (74 kg) and 10% (72.2 kg). Mark legend below; 4w/12w/All range chips (`config.chartRange`) window the *display only* — regression and averages always use full data.
+- Trend chart: raw weigh-ins as faint dots, 7-day trailing average as the line, dashed goal lines at 12% (74 kg) and 10% (72.2 kg). Mark legend below; 1w/1m/All range chips (`config.chartRange`) window the *display only* — regression and averages always use full data.
 - Daily log rows: tap to load a day back into the form for editing (same-date submit merges non-null fields); swipe left to reveal Delete (two-step on purpose — the old always-visible × was too easy to fat-finger).
 - Six guardrails over the last 7 logged days, worst one becomes the headline verdict:
   1. **Loss rate** — target band 0.5–0.7 kg/wk; >1.0 is crit.
