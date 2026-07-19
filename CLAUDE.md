@@ -47,4 +47,5 @@ Upcoming: 2-week Japan trip at maintenance (~2,800) — if he mentions it, that'
 - localStorage is per-origin: file://, localhost, GitHub Pages, and the artifact URL hold separate data. Jeff's real data belongs on the GitHub Pages origin (migration from the artifact via Export/Import was pending as of 2026-07-19 — confirm it happened before assuming).
 - Storage key is `cutTracker.v1`. If you change the data shape, migrate on load — don't bump the key and orphan his log.
 - The page is published as an artifact: strict CSP, no external requests, so it must stay fully self-contained (it already is — keep it that way).
+- Viewport is pinned (`user-scalable=no`) and `touch-action: manipulation` is set globally: WebKit's double-tap-to-zoom was breaking the layout on double-taps anywhere in the app (2026-07-19). Don't remove this — a controlled dashboard shouldn't pinch/double-tap zoom, same as a native app wouldn't.
 - File starts with `<title>` directly (no doctype/html/head/body) because the Artifact tool wraps it; browsers handle it fine locally too.
