@@ -300,8 +300,8 @@
     <div class="card-head">
       <h2>Weight trend</h2>
       <div class="chips" id="rangeChips">
-        <button class="chip" data-range="4w" type="button">4w</button>
-        <button class="chip" data-range="12w" type="button">12w</button>
+        <button class="chip" data-range="1w" type="button">1w</button>
+        <button class="chip" data-range="1m" type="button">1m</button>
         <button class="chip" data-range="all" type="button">All</button>
       </div>
     </div>
@@ -375,7 +375,7 @@
       fatMass: 12.7,        // kg fat (from DEXA) — sets the fat-supply ceiling
       fatKcalPerKg: 30,     // kcal/day fat can release per kg fat (12.7 × 30 ≈ 380)
       stepsLo: 8000, stepsHi: 12000, // activity band the maintenance estimate assumes
-      chartRange: "all"              // chart display window: 4w | 12w | all (display only — regression unaffected)
+      chartRange: "all"              // chart display window: 1w | 1m | all (display only — regression unaffected)
     },
     entries: []
   };
@@ -579,7 +579,7 @@
     box.querySelectorAll(".tooltip").forEach(n => n.remove());
     const c = state.config;
     // display window only — the regression and averages always use full data
-    const span = { "4w": 28, "12w": 84 }[c.chartRange] || null;
+    const span = { "1w": 7, "1m": 30 }[c.chartRange] || null;
     const cutoff = span ? m.latest - span : -Infinity;
     m = Object.assign({}, m, {
       weights: m.weights.filter(p => p.x > cutoff),
