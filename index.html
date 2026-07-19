@@ -137,7 +137,7 @@
   .verdict .vwhy { margin-top: 8px; color: var(--ink-muted); font-size: 13.5px; line-height: 1.5; }
   /* six-segment system strip: one tick per guardrail, in card order — makes
      the "verdict = worst of six" logic visible before a word is read */
-  .vstrip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin-top: 15px; }
+  .vstrip { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-top: 15px; }
   .vseg i { display: block; height: 4px; border-radius: 2px; background: var(--sc, var(--border-strong)); }
   .vseg span {
     display: block; margin-top: 4px; font-size: 8.5px; font-weight: 650; letter-spacing: 0.07em;
@@ -219,11 +219,12 @@
   form.log { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
   form.log .field { display: flex; flex-direction: column; gap: 4px; }
   form.log label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); }
-  input, .btn, details.settings input {
+  input, select, .btn, details.settings input {
     font-family: var(--sans); font-size: 15px; color: var(--ink);
     background: var(--surface-2); border: 1px solid var(--border); border-radius: 9px;
     padding: 9px 10px; width: 100%; -webkit-appearance: none; appearance: none;
   }
+  select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
   input[type="number"], input[type="date"] { font-family: var(--mono); font-variant-numeric: tabular-nums; }
   input:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
   .btn {
@@ -233,6 +234,16 @@
   .btn:hover { filter: brightness(1.06); }
   .btn.ghost { background: var(--surface-2); color: var(--ink-muted); }
   .btn.row-add { grid-column: 1 / -1; }
+  form.lift { display: grid; grid-template-columns: 1.7fr 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+  .liftrow {
+    display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; align-items: center; gap: 8px;
+    padding: 9px 2px; border-top: 1px solid var(--border); font-size: 13px;
+  }
+  .liftrow:first-child { border-top: 0; }
+  .liftrow .ln { font-weight: 600; }
+  .liftrow .lm { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-muted); font-size: 12.5px; }
+  .liftrow .lc { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: 650; text-align: right; }
+
   .loglist { display: flex; flex-direction: column; }
   .logrow {
     display: grid; grid-template-columns: 78px 1fr 1fr 1fr 1fr; align-items: center; gap: 8px;
@@ -339,6 +350,17 @@
     <div class="loglist" id="logList"></div>
   </section>
 
+  <section class="card">
+    <div class="card-head"><h2>Strength check</h2><span class="hint">best set after training — the canary for muscle</span></div>
+    <form class="lift" id="liftForm">
+      <select id="l-lift"></select>
+      <input type="number" step="0.5" inputmode="decimal" id="l-w" placeholder="kg">
+      <input type="number" step="1" inputmode="numeric" id="l-reps" placeholder="reps">
+      <button class="btn row-add" id="saveSet" type="submit">Save set</button>
+    </form>
+    <div id="liftList"></div>
+  </section>
+
   <details class="card settings">
     <summary>Targets &amp; data</summary>
     <div class="settings-grid" id="settings"></div>
@@ -375,9 +397,11 @@
       fatMass: 12.7,        // kg fat (from DEXA) — sets the fat-supply ceiling
       fatKcalPerKg: 30,     // kcal/day fat can release per kg fat (12.7 × 30 ≈ 380)
       stepsLo: 8000, stepsHi: 12000, // activity band the maintenance estimate assumes
-      chartRange: "all"              // chart display window: 1w | 1m | all (display only — regression unaffected)
+      chartRange: "all",             // chart display window: 1w | 1m | all (display only — regression unaffected)
+      lift1: "Weighted dip", lift2: "Bench press", lift3: "Squat"  // benchmark lifts (editable)
     },
-    entries: []
+    entries: [],
+    strength: []  // [{date, lift, w, reps}] — best set per session on benchmark lifts
   };
 
   // ---------- state ----------
@@ -387,7 +411,7 @@
       const raw = localStorage.getItem(KEY);
       if (raw) {
         const p = JSON.parse(raw);
-        return { config: Object.assign({}, DEFAULTS.config, p.config), entries: p.entries || [] };
+        return { config: Object.assign({}, DEFAULTS.config, p.config), entries: p.entries || [], strength: p.strength || [] };
       }
     } catch (e) {}
     return JSON.parse(JSON.stringify(DEFAULTS));
@@ -401,6 +425,26 @@
   const fmtInt = n => n == null || isNaN(n) ? "—" : Math.round(n).toLocaleString("en-US");
   const shortDate = s => { const [y, m, d] = s.split("-"); return d + "/" + m; };
   const sorted = () => state.entries.slice().sort((a, b) => a.date < b.date ? -1 : 1);
+
+  // Epley estimated 1RM — comparable across rep counts, so "40×8" vs "42×6" is a fair fight
+  const epley = (w, r) => r > 0 ? w * (1 + r / 30) : w;
+  function liftNames() {
+    const c = state.config;
+    return [c.lift1, c.lift2, c.lift3].map(n => n && String(n).trim()).filter(Boolean);
+  }
+  function strengthStats() {
+    const today = dnum(todayStr());
+    return liftNames().map(name => {
+      const sets = state.strength.filter(s => s.lift === name);
+      if (!sets.length) return { name, n: 0 };
+      const best = Math.max.apply(null, sets.map(s => epley(s.w, s.reps)));
+      const recent = sets.filter(s => today - dnum(s.date) <= 21);
+      const recentBest = recent.length ? Math.max.apply(null, recent.map(s => epley(s.w, s.reps))) : null;
+      const last = sets.slice().sort((a, b) => a.date < b.date ? -1 : 1)[sets.length - 1];
+      return { name, n: sets.length, best, recentBest, last,
+        ratio: recentBest != null && best > 0 ? recentBest / best : null };
+    });
+  }
 
   function regressionSlope(pts) {
     const n = pts.length; if (n < 2) return null;
@@ -516,7 +560,27 @@
       g.push({ key: "Protein", val, sev, state: state_, sub, icon: sevIcon(sev) });
     })();
 
-    // 6. Activity — calibration check on the maintenance estimate, NOT a
+    // 6. Strength — the outcome the whole app protects, measured directly:
+    // recent-21-day best e1RM per benchmark lift vs cut-best. Needs ≥2 sets
+    // per lift so a single baseline session can't judge itself.
+    (function () {
+      const stats = strengthStats().filter(s => s.n >= 2 && s.ratio != null);
+      let sev, state_, sub, val;
+      if (!stats.length) {
+        sev = "none"; state_ = "No data"; val = "—";
+        sub = "After training, log your best set on a benchmark lift below. Strength holding is the proof muscle is staying.";
+      } else {
+        const worst = stats.reduce((a, b) => a.ratio <= b.ratio ? a : b);
+        const down = Math.round((1 - worst.ratio) * 100);
+        val = Math.round(worst.ratio * 100) + "%";
+        if (worst.ratio >= 0.97) { sev = "good"; state_ = "Holding"; sub = worst.name + " is at " + val + " of your cut-best e1RM. Strength held = muscle held — the scale loss is fat."; }
+        else if (worst.ratio >= 0.92) { sev = "warn"; state_ = "Slipping"; sub = worst.name + " e1RM is ~" + down + "% off your cut best. Could be fatigue or a bad day — watch the next sessions, and don't deepen the deficit."; }
+        else { sev = "crit"; state_ = "Losing strength"; sub = worst.name + " is down " + down + "% — this is the dips alarm. Check the intake cards and eat your full target."; }
+      }
+      g.push({ key: "Strength", val, sev, state: state_, sub, icon: sevIcon(sev) });
+    })();
+
+    // 7. Activity — calibration check on the maintenance estimate, NOT a
     // calorie input (device burn numbers are too noisy to enter the math).
     // Warn-only and last in order: at equal severity every other card outranks it.
     (function () {
@@ -558,6 +622,7 @@
     if (g.key === "Loss rate") return "Losing too fast — eat more.";
     if (g.key === "Muscle risk") return "Deficit too deep — muscle's at risk.";
     if (g.key === "Protein") return "Protein's too low — push it up.";
+    if (g.key === "Strength") return "Strength is dropping — eat and recover, don't dig deeper.";
     return g.state;
   }
   function warnMsg(g) {
@@ -566,6 +631,7 @@
     if (g.key === "Muscle risk") return "Deficit is stretching what fat can cover.";
     if (g.key === "Protein") return "Protein's just short of your floor.";
     if (g.key === "Energy floor") return "A day ran close to your floor.";
+    if (g.key === "Strength") return "Strength is slipping — watch the next sessions.";
     if (g.key === "Activity") return g.state === "Low movement"
       ? "Steps are down — the same intake cuts slower than planned."
       : "Steps are up — the deficit is running bigger than planned.";
@@ -705,7 +771,7 @@
     const vcol = v.sev === "good" ? "var(--good)" : v.sev === "warn" ? "var(--warn)" : v.sev === "crit" ? "var(--crit)" : "var(--accent)";
     const vsoft = v.sev === "good" ? "var(--good-soft)" : v.sev === "warn" ? "var(--warn-soft)" : v.sev === "crit" ? "var(--crit-soft)" : "var(--accent-soft)";
     vEl.style.setProperty("--vc", vcol); vEl.style.setProperty("--vc-soft", vsoft);
-    const SEG_LABELS = ["Rate", "Kcal", "Floor", "Muscle", "Protein", "Steps"];
+    const SEG_LABELS = ["Rate", "Kcal", "Floor", "Muscle", "Protein", "Lifts", "Steps"];
     vEl.innerHTML =
       '<span class="vtag"><span class="dot"></span>' + v.tag + '</span>' +
       '<div class="vmsg">' + v.msg + '</div>' +
@@ -756,8 +822,33 @@
     // log list
     renderLog();
 
+    // strength card
+    renderLifts();
+
     // keep the form's placeholders reflecting its date's saved values
     syncLogForm();
+  }
+
+  function renderLifts() {
+    const sel = document.getElementById("l-lift");
+    const keep = sel.value;
+    sel.innerHTML = liftNames().map(n => '<option value="' + n + '">' + n + '</option>').join("");
+    if (keep && liftNames().indexOf(keep) !== -1) sel.value = keep;
+
+    const box = document.getElementById("liftList");
+    const stats = strengthStats().filter(s => s.n > 0);
+    if (!stats.length) {
+      box.innerHTML = '<div class="chart-empty" style="padding:12px 0">No sets yet. After training, log the best set of a benchmark lift — weight × reps.</div>';
+      return;
+    }
+    box.innerHTML = stats.map(s => {
+      const ratio = s.ratio != null && s.n >= 2 ? Math.round(s.ratio * 100) : null;
+      const col = ratio == null ? "var(--ink-faint)" : ratio >= 97 ? "var(--good)" : ratio >= 92 ? "var(--warn)" : "var(--crit)";
+      return '<div class="liftrow"><span class="ln">' + s.name + '</span>' +
+        '<span class="lm">' + s.last.w + ' kg × ' + s.last.reps + '</span>' +
+        '<span class="lm">e1RM ' + Math.round(epley(s.last.w, s.last.reps)) + '</span>' +
+        '<span class="lc" style="color:' + col + '">' + (ratio == null ? "baseline" : ratio + "% of best") + '</span></div>';
+    }).join("");
   }
 
   function stat(lbl, val, unit, cap, accent) {
@@ -898,7 +989,19 @@
     sb.textContent = "Saved ✓"; setTimeout(() => { sb.textContent = "Save day"; }, 1200);
   });
 
-  // the form is a running log for its date: values already on file show as
+  document.getElementById("liftForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const lift = document.getElementById("l-lift").value;
+    const w = +document.getElementById("l-w").value, reps = +document.getElementById("l-reps").value;
+    if (!lift || !(w > 0) || !(reps > 0)) return;
+    state.strength.push({ date: todayStr(), lift, w, reps });
+    save(); render();
+    document.getElementById("l-w").value = ""; document.getElementById("l-reps").value = "";
+    const sb = document.getElementById("saveSet");
+    sb.textContent = "Saved ✓"; setTimeout(() => { sb.textContent = "Save set"; }, 1200);
+  });
+
+  // the form is a running log for its date: values already show as
   // grey placeholders, so blank = "keep what's saved", typing = overwrite
   function syncLogForm() {
     const e = state.entries.find(x => x.date === document.getElementById("f-date").value);
@@ -915,12 +1018,14 @@
     ["startWeight", "Start weight kg"], ["startDate", "Cut start date"],
     ["goal12", "12% goal kg"], ["goal10", "10% goal kg"],
     ["fatMass", "Fat mass kg (DEXA)"],
-    ["stepsLo", "Steps baseline min"], ["stepsHi", "Steps baseline max"]
+    ["stepsLo", "Steps baseline min"], ["stepsHi", "Steps baseline max"],
+    ["lift1", "Benchmark lift 1"], ["lift2", "Benchmark lift 2"], ["lift3", "Benchmark lift 3"]
   ];
+  const TEXT_CFG = { startDate: "date", lift1: "text", lift2: "text", lift3: "text" };
   function renderSettings() {
     document.getElementById("settings").innerHTML = CFG_FIELDS.map(([k, lbl]) => {
       const v = state.config[k];
-      const type = k === "startDate" ? "date" : "number";
+      const type = TEXT_CFG[k] || "number";
       const step = (k === "rateLo" || k === "rateHi" || k === "goal12" || k === "goal10" || k === "startWeight" || k === "fatMass") ? "0.1" : "1";
       return '<div class="field"><label>' + lbl + '</label><input data-cfg="' + k + '" type="' + type + '" step="' + step + '" value="' + v + '"></div>';
     }).join("");
@@ -928,7 +1033,7 @@
   document.getElementById("saveCfg").addEventListener("click", () => {
     document.querySelectorAll("[data-cfg]").forEach(inp => {
       const k = inp.dataset.cfg;
-      state.config[k] = k === "startDate" ? inp.value : +inp.value;
+      state.config[k] = TEXT_CFG[k] ? inp.value : +inp.value;
     });
     save(); render();
     const b = document.getElementById("saveCfg"); b.textContent = "Saved ✓"; setTimeout(() => b.textContent = "Save targets", 1200);
@@ -943,7 +1048,7 @@
   document.getElementById("importFile").addEventListener("change", e => {
     const f = e.target.files[0]; if (!f) return;
     const r = new FileReader();
-    r.onload = () => { try { const p = JSON.parse(r.result); state = { config: Object.assign({}, DEFAULTS.config, p.config), entries: p.entries || [] }; save(); renderSettings(); render(); } catch (err) { alert("Couldn't read that backup file."); } };
+    r.onload = () => { try { const p = JSON.parse(r.result); state = { config: Object.assign({}, DEFAULTS.config, p.config), entries: p.entries || [], strength: p.strength || [] }; save(); renderSettings(); render(); } catch (err) { alert("Couldn't read that backup file."); } };
     r.readAsText(f);
   });
   // ---------- Apple Health import (iOS Shortcuts clipboard bridge) ----------

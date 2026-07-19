@@ -86,6 +86,18 @@ setTimeout(() => {
   }
   expect("low steps flag miscalibration", /steps are down|low movement/i.test(strip(rendered["verdict"])), strip(rendered["verdict"]));
 
+  // 6. strength decline outranks everything else that's merely warn:
+  // seed a cut-best dip set 25 days back and a much weaker recent one, re-boot
+  const st = JSON.parse(store["cutTracker.v1"]);
+  const dstr = off => new Date(day0 - off * 86400000).toISOString().slice(0, 10);
+  st.strength = [
+    { date: dstr(25), lift: "Weighted dip", w: 40, reps: 8 },  // e1RM ≈ 50.7 (cut best)
+    { date: dstr(1), lift: "Weighted dip", w: 30, reps: 8 },   // e1RM ≈ 38 → 75% → crit
+  ];
+  store["cutTracker.v1"] = JSON.stringify(st);
+  eval(html.match(/<script>([\s\S]*)<\/script>/)[1]);
+  expect("strength drop flags crit", /strength/i.test(strip(rendered["verdict"])), strip(rendered["verdict"]));
+
   console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL PASS");
   process.exit(failures ? 1 : 0);
 }, 10);
