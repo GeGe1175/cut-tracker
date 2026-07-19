@@ -1144,6 +1144,30 @@
     }).catch(() => done("Paste not allowed"));
   });
 
+  // Auto-sync (native only): pull Health data on launch/foreground instead of
+  // requiring a tap. No Background Delivery entitlement needed — this runs
+  // whenever the app is actually open, which covers "open it and it's filled
+  // in" without any background-execution complexity. Throttled so repeated
+  // app-switches don't hammer HealthKit.
+  const AUTO_SYNC_KEY = "cutTracker.lastHealthAutoSync";
+  const AUTO_SYNC_MIN_GAP_MS = 15 * 60 * 1000;
+  function autoSyncHealth() {
+    if (!nativeHealth) return;
+    let last = 0;
+    try { last = +(localStorage.getItem(AUTO_SYNC_KEY) || 0); } catch (e) {}
+    if (Date.now() - last < AUTO_SYNC_MIN_GAP_MS) return;
+    try { localStorage.setItem(AUTO_SYNC_KEY, String(Date.now())); } catch (e) {}
+    nativeHealth.readDaily({ days: 14 }).then(res => {
+      if (mergeHealthRows(parseHealthImport(JSON.stringify(res.days || [])))) render();
+    }).catch(() => {});
+  }
+  autoSyncHealth();
+  if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") autoSyncHealth();
+    });
+  }
+
   document.getElementById("rangeChips").addEventListener("click", ev => {
     const b = ev.target && ev.target.closest ? ev.target.closest(".chip") : null;
     if (!b) return;
