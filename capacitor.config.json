@@ -1,0 +1,9 @@
+{
+  "appId": "io.github.gege1175.cuttracker",
+  "appName": "Cut Tracker",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "automatic"
+  },
+  "packageClassList": ["HealthSyncPlugin"]
+}

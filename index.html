@@ -1108,9 +1108,31 @@
     return rows.length;
   }
 
+  // Native (Capacitor) build talks to HealthKit directly via HealthSyncPlugin;
+  // the web build falls back to the iOS-Shortcut clipboard bridge.
+  const nativeHealth = (function () {
+    try {
+      if (typeof window !== "undefined" && window.Capacitor &&
+          window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
+        return window.Capacitor.registerPlugin("HealthSync");
+      }
+    } catch (e) {}
+    return null;
+  })();
+
   document.getElementById("healthBtn").addEventListener("click", () => {
     const btn = document.getElementById("healthBtn");
     const done = msg => { btn.textContent = msg; setTimeout(() => { btn.textContent = "Import from Health"; }, 2500); };
+
+    if (nativeHealth) {
+      btn.textContent = "Reading Health…";
+      nativeHealth.readDaily({ days: 14 }).then(res => {
+        const n = mergeHealthRows(parseHealthImport(JSON.stringify(res.days || [])));
+        done(n ? "Imported " + n + " day" + (n === 1 ? "" : "s") + " ✓" : "No Health data found");
+      }).catch(() => done("Health access denied"));
+      return;
+    }
+
     if (typeof navigator === "undefined" || !navigator.clipboard || !navigator.clipboard.readText) {
       done("Needs HTTPS + clipboard"); return;
     }

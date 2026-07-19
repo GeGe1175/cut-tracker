@@ -7,6 +7,9 @@ Personal single-user app for Jeff: cut fat, keep muscle. Everything lives in `in
 
 **Legacy: claude.ai artifact** at https://claude.ai/code/artifact/9490127c-1f5e-46e8-9312-84ba30e07094 — kept as a fallback; claude.ai wraps it in its own page (iframe), so PWA tags can't work there and the manifest/icon/sw requests silently fail (harmless, guarded). To update it: call the Artifact tool with `index.html`'s path AND `url` set to that link — without `url`, a new conversation mints a different URL. Keep favicon 🎯 and title "Cut Tracker".
 
+## iOS app (Capacitor)
+`ios/` is a Capacitor 7 wrapper around the same `index.html` (`npm run build:www` copies web files to `www/`; `npm run ios` = build + sync + open Xcode). `HealthSyncPlugin.swift` reads weight/kcal/protein/steps from HealthKit and returns rows shaped like the clipboard-import JSON, so the JS merge path is shared; on native, the "Import from Health" button calls the plugin instead of the clipboard. Info.plist has the Health usage strings; `App.entitlements` + pbxproj carry the HealthKit entitlement. Requires Xcode 16+ (13.x fails compiling Capacitor 7 — seen 2026-07-19). Signing: Jeff's free Apple ID in Xcode (7-day resign cadence) unless he buys the dev program. The web app remains canonical; don't fork index.html for iOS.
+
 ## What the app does
 - Daily log (date / weight kg / kcal / protein g) → localStorage under key `cutTracker.v1`. Partial entries fine; fields merge per date.
 - Trend chart: raw weigh-ins as faint dots, 7-day trailing average as the line, dashed goal lines at 12% (74 kg) and 10% (72.2 kg). Mark legend below; 1w/1m/All range chips (`config.chartRange`) window the *display only* — regression and averages always use full data.

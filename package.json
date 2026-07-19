@@ -5,6 +5,15 @@
   "description": "Personal cut dashboard — lose fat, keep muscle. Single-file app, no dependencies.",
   "scripts": {
     "dev": "python3 -m http.server 8000",
-    "test": "node smoke.js"
+    "test": "node smoke.js",
+    "build:www": "rm -rf www && mkdir -p www && cp index.html manifest.webmanifest sw.js apple-touch-icon.png icon-192.png icon-512.png www/",
+    "ios": "npm run build:www && npx cap sync ios && npx cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0"
   }
 }
