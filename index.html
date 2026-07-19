@@ -327,14 +327,14 @@
   </section>
 
   <section class="card">
-    <div class="card-head"><h2>Log a day</h2><span class="hint">weight is the one that matters daily</span></div>
+    <div class="card-head"><h2>Log a day</h2><span class="hint">log as you go — grey numbers are already saved</span></div>
     <form class="log" id="logForm">
       <div class="field"><label for="f-date">Date</label><input type="date" id="f-date" required></div>
       <div class="field"><label for="f-weight">Weight kg</label><input type="number" step="0.01" inputmode="decimal" id="f-weight" placeholder="—"></div>
       <div class="field"><label for="f-kcal">kcal</label><input type="number" step="1" inputmode="numeric" id="f-kcal" placeholder="—"></div>
       <div class="field"><label for="f-protein">Protein g</label><input type="number" step="1" inputmode="numeric" id="f-protein" placeholder="—"></div>
       <div class="field"><label for="f-steps">Steps</label><input type="number" step="1" inputmode="numeric" id="f-steps" placeholder="—"></div>
-      <button class="btn row-add" type="submit">Save day</button>
+      <button class="btn row-add" id="saveDay" type="submit">Save day</button>
     </form>
     <div class="loglist" id="logList"></div>
   </section>
@@ -755,6 +755,9 @@
 
     // log list
     renderLog();
+
+    // keep the form's placeholders reflecting its date's saved values
+    syncLogForm();
   }
 
   function stat(lbl, val, unit, cap, accent) {
@@ -891,7 +894,20 @@
     document.getElementById("f-kcal").value = "";
     document.getElementById("f-protein").value = "";
     document.getElementById("f-steps").value = "";
+    const sb = document.getElementById("saveDay");
+    sb.textContent = "Saved ✓"; setTimeout(() => { sb.textContent = "Save day"; }, 1200);
   });
+
+  // the form is a running log for its date: values already on file show as
+  // grey placeholders, so blank = "keep what's saved", typing = overwrite
+  function syncLogForm() {
+    const e = state.entries.find(x => x.date === document.getElementById("f-date").value);
+    [["f-weight", "weight"], ["f-kcal", "kcal"], ["f-protein", "protein"], ["f-steps", "steps"]].forEach(([id, k]) => {
+      const v = e ? e[k] : null;
+      document.getElementById(id).placeholder = v == null ? "—" : v;
+    });
+  }
+  document.getElementById("f-date").addEventListener("change", syncLogForm);
 
   const CFG_FIELDS = [
     ["calTarget", "Calorie target"], ["rmr", "RMR floor"], ["proteinTarget", "Protein target g"],
