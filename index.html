@@ -1112,15 +1112,18 @@
 
   // Native (Capacitor) build talks to HealthKit directly via HealthSyncPlugin;
   // the web build falls back to the iOS-Shortcut clipboard bridge.
-  const nativeHealth = (function () {
-    try {
-      if (typeof window !== "undefined" && window.Capacitor &&
-          window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) {
-        return window.Capacitor.registerPlugin("HealthSync");
+  let nativeHealth = null, nativeHealthDiag = "no window";
+  try {
+    if (typeof window !== "undefined") {
+      if (!window.Capacitor) { nativeHealthDiag = "no window.Capacitor"; }
+      else if (!window.Capacitor.isNativePlatform || !window.Capacitor.isNativePlatform()) {
+        nativeHealthDiag = "Capacitor present, platform=" + (window.Capacitor.getPlatform ? window.Capacitor.getPlatform() : "?");
+      } else {
+        nativeHealth = window.Capacitor.registerPlugin("HealthSync");
+        nativeHealthDiag = "bridge ok, plugin registered";
       }
-    } catch (e) {}
-    return null;
-  })();
+    }
+  } catch (e) { nativeHealthDiag = "error: " + (e && e.message || e); }
 
   document.getElementById("healthBtn").addEventListener("click", () => {
     const btn = document.getElementById("healthBtn");
@@ -1136,12 +1139,12 @@
     }
 
     if (typeof navigator === "undefined" || !navigator.clipboard || !navigator.clipboard.readText) {
-      done("Needs HTTPS + clipboard"); return;
+      done("No native bridge: " + nativeHealthDiag); return;
     }
     navigator.clipboard.readText().then(t => {
       const n = mergeHealthRows(parseHealthImport(t));
       done(n ? "Imported " + n + " day" + (n === 1 ? "" : "s") + " ✓" : "No Health data on clipboard");
-    }).catch(() => done("Paste not allowed"));
+    }).catch(() => done("No native bridge: " + nativeHealthDiag));
   });
 
   // Auto-sync (native only): pull Health data on launch/foreground instead of
