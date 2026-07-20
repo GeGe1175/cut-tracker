@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "python3 -m http.server 8000",
     "test": "node smoke.js",
-    "build:www": "rm -rf www && mkdir -p www && cp index.html manifest.webmanifest sw.js apple-touch-icon.png icon-192.png icon-512.png www/",
-    "ios": "npm run build:www && npx cap sync ios && npx cap open ios"
+    "build:www": "rm -rf www && mkdir -p www && cp index.html manifest.webmanifest sw.js apple-touch-icon.png icon-192.png icon-512.png www/ && cp node_modules/@capacitor/core/dist/capacitor.js www/",
+    "ios": "npm run build:www && npx cap sync ios && node scripts/patch-ios-config.js && npx cap open ios",
+    "ios:sync": "npm run build:www && npx cap sync ios && node scripts/patch-ios-config.js"
   },
   "dependencies": {
     "@capacitor/core": "^7.0.0",

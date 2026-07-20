@@ -1,5 +1,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<!-- Capacitor's JS runtime (registerPlugin, etc.) — only present in the native
+     iOS build's www/ bundle; 404s harmlessly on GitHub Pages / the artifact. -->
+<script src="capacitor.js"></script>
 <meta name="theme-color" content="#eef1f5" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0d1219" media="(prefers-color-scheme: dark)">
 <meta name="mobile-web-app-capable" content="yes">
@@ -1134,7 +1137,7 @@
       nativeHealth.readDaily({ days: 14 }).then(res => {
         const n = mergeHealthRows(parseHealthImport(JSON.stringify(res.days || [])));
         done(n ? "Imported " + n + " day" + (n === 1 ? "" : "s") + " ✓" : "No Health data found");
-      }).catch(() => done("Health access denied"));
+      }).catch(err => done("Health error: " + (err && err.message || err)));
       return;
     }
 
