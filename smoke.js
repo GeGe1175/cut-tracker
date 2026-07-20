@@ -8,6 +8,7 @@ function makeEl(id) {
   const listeners = {};
   return {
     id, value: "", dataset: {}, style: { setProperty() {}, opacity: "" },
+    classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
     set innerHTML(v) { rendered[id || "anon"] = v; this._html = v; },
     get innerHTML() { return this._html || ""; },
     set textContent(v) { rendered[(id || "anon") + ".text"] = v; },

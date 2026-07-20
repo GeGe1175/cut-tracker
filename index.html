@@ -287,6 +287,8 @@
   .settings-grid .field { display: flex; flex-direction: column; gap: 4px; }
   .settings-grid label { font-size: 11px; color: var(--ink-muted); }
   .settings-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .backup-status { font-size: 11.5px; color: var(--ink-faint); margin-top: 10px; }
+  .backup-status.due { color: var(--warn); font-weight: 600; }
 
   footer { text-align: center; color: var(--ink-faint); font-size: 11px; line-height: 1.6; padding: 4px 8px; }
   a.reset { color: var(--ink-faint); text-decoration: underline; cursor: pointer; }
@@ -389,6 +391,7 @@
       <button class="btn ghost" id="healthBtn" type="button">Import from Health</button>
       <input type="file" id="importFile" accept="application/json" hidden>
     </div>
+    <div class="backup-status" id="backupStatus"></div>
   </details>
 
   <footer>
@@ -1057,10 +1060,60 @@
     const b = document.getElementById("saveCfg"); b.textContent = "Saved ✓"; setTimeout(() => b.textContent = "Save targets", 1200);
   });
 
+  // Native platform detection for Filesystem/Share, mirroring the HealthSync
+  // pattern. The browser's anchor+download trick (used below for web) is a
+  // silent no-op inside a native WKWebView shell — there's no download
+  // manager to catch it — so native needs the real Filesystem+Share plugins
+  // to hand the file to iOS's own Save/AirDrop/Files sheet.
+  const nativeFS = (function () {
+    try {
+      if (typeof window !== "undefined" && window.Capacitor &&
+          window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() &&
+          window.Capacitor.registerPlugin) {
+        return window.Capacitor.registerPlugin("Filesystem");
+      }
+    } catch (e) {}
+    return null;
+  })();
+  const nativeShare = (function () {
+    try {
+      if (nativeFS) return window.Capacitor.registerPlugin("Share");
+    } catch (e) {}
+    return null;
+  })();
+
+  const LAST_BACKUP_KEY = "cutTracker.lastBackupAt";
+  function markBackedUp() {
+    try { localStorage.setItem(LAST_BACKUP_KEY, String(Date.now())); } catch (e) {}
+    renderBackupStatus();
+  }
+  function renderBackupStatus() {
+    const el = document.getElementById("backupStatus"); if (!el) return;
+    let last = 0;
+    try { last = +(localStorage.getItem(LAST_BACKUP_KEY) || 0); } catch (e) {}
+    if (!last) { el.textContent = "Never backed up — tap Export backup so a delete/reinstall can't lose your log."; el.classList.add("due"); return; }
+    const days = Math.floor((Date.now() - last) / 86400000);
+    const due = days >= 7;
+    el.textContent = (days <= 0 ? "Backed up today" : "Last backup " + days + " day" + (days === 1 ? "" : "s") + " ago") +
+      (due ? " — export again, it's been a while." : ".");
+    el.classList.toggle("due", due);
+  }
+
   document.getElementById("exportBtn").addEventListener("click", () => {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+    const btn = document.getElementById("exportBtn");
+    const json = JSON.stringify(state, null, 2);
+    const filename = "cut-tracker-" + todayStr() + ".json";
+    if (nativeFS && nativeShare) {
+      nativeFS.writeFile({ path: filename, data: json, directory: "CACHE", encoding: "utf8" })
+        .then(res => nativeShare.share({ title: "Cut Tracker backup", url: res.uri }))
+        .then(() => markBackedUp())
+        .catch(() => { btn.textContent = "Export failed"; setTimeout(() => { btn.textContent = "Export backup"; }, 2000); });
+      return;
+    }
+    const blob = new Blob([json], { type: "application/json" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = "cut-tracker-" + todayStr() + ".json"; a.click();
+    a.download = filename; a.click();
+    markBackedUp();
   });
   document.getElementById("importBtn").addEventListener("click", () => document.getElementById("importFile").click());
   document.getElementById("importFile").addEventListener("change", e => {
@@ -1279,6 +1332,7 @@
 
   renderSettings();
   render();
+  renderBackupStatus();
 
   // Offline support when self-hosted (GitHub Pages). No-ops on the claude.ai
   // artifact, whose CSP has no sw.js to serve — hence the silent catch.
