@@ -1102,7 +1102,9 @@
   document.getElementById("exportBtn").addEventListener("click", () => {
     const btn = document.getElementById("exportBtn");
     const json = JSON.stringify(state, null, 2);
-    const filename = "cut-tracker-" + todayStr() + ".json";
+    // Fixed name (no date) so each export overwrites the last one, rather
+    // than piling up a dated file per day — single canonical latest backup.
+    const filename = "cut-tracker-backup.json";
     if (nativeFS && nativeShare) {
       nativeFS.writeFile({ path: filename, data: json, directory: "CACHE", encoding: "utf8" })
         .then(res => nativeShare.share({ title: "Cut Tracker backup", url: res.uri }))
