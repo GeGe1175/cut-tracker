@@ -86,24 +86,59 @@
     font-family: var(--sans);
     background: var(--bg);
     color: var(--ink);
-    min-height: 100vh;
+    height: 100dvh;
     -webkit-font-smoothing: antialiased;
-    padding: 20px 16px 64px;
     max-width: 660px;
     margin: 0 auto;
     display: flex;
     flex-direction: column;
-    gap: 16px;
     touch-action: manipulation;
+    overflow: hidden;
   }
   h1, h2, h3 { margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
 
-  header { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 4px 2px 2px; }
+  header { flex-shrink: 0; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 16px 16px 10px; }
   header h1 { font-family: var(--display); font-size: 27px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; line-height: 0.95; }
   header .sub { margin: 4px 0 0; color: var(--ink-faint); font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase; }
   .daybox { text-align: right; flex-shrink: 0; }
   .daybox .day-num { font-family: var(--mono); font-size: 22px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
   .daybox .day-cap { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); margin-top: 4px; }
+
+  /* ---- Pager: swipeable Log / Overview / Coach screens ---- */
+  .pager {
+    flex: 1 1 auto; min-height: 0; display: flex;
+    overflow-x: auto; overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  .pager::-webkit-scrollbar { display: none; }
+  .page {
+    flex: 0 0 100%; width: 100%; min-width: 100%; height: 100%;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+    scroll-snap-align: start; scroll-snap-stop: always;
+    box-sizing: border-box; padding: 4px 16px 24px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  /* Cards must never be crushed to fit — the page itself scrolls instead.
+     Needed because flex items with overflow:hidden (e.g. .verdict, for its
+     accent-bar clip) lose the normal "don't shrink below content" floor. */
+  .page > * { flex-shrink: 0; }
+
+  .tabbar {
+    flex-shrink: 0; display: flex;
+    border-top: 1px solid var(--border); background: var(--surface);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  }
+  .tab {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+    background: none; border: none; cursor: pointer; padding: 6px 4px; border-radius: 10px;
+    color: var(--ink-faint); font-family: var(--sans); font-size: 10.5px; font-weight: 650;
+    letter-spacing: 0.02em; -webkit-tap-highlight-color: transparent;
+  }
+  .tab svg { width: 21px; height: 21px; }
+  .tab.active { color: var(--accent); }
+  .tab:active { background: var(--surface-2); }
 
   .card {
     background: var(--surface);
@@ -313,91 +348,116 @@
     </div>
   </header>
 
-  <section class="verdict" id="verdict"></section>
+  <div class="pager" id="pager">
 
-  <section class="readouts" id="readouts"></section>
+    <section class="page" id="page-log">
+      <section class="card">
+        <div class="card-head"><h2>Log a day</h2><span class="hint">log as you go — grey numbers are already saved</span></div>
+        <form class="log" id="logForm">
+          <div class="field"><label for="f-date">Date</label><input type="date" id="f-date" required></div>
+          <div class="field"><label for="f-weight">Weight kg</label><input type="number" step="0.01" inputmode="decimal" id="f-weight" placeholder="—"></div>
+          <div class="field"><label for="f-kcal">kcal</label><input type="number" step="1" inputmode="numeric" id="f-kcal" placeholder="—"></div>
+          <div class="field"><label for="f-protein">Protein g</label><input type="number" step="1" inputmode="numeric" id="f-protein" placeholder="—"></div>
+          <div class="field"><label for="f-steps">Steps</label><input type="number" step="1" inputmode="numeric" id="f-steps" placeholder="—"></div>
+          <button class="btn row-add" id="saveDay" type="submit">Save day</button>
+        </form>
+        <div class="loglist" id="logList"></div>
+      </section>
 
-  <section class="card chart-card">
-    <div class="card-head">
-      <h2>Weight trend</h2>
-      <div class="chips" id="rangeChips">
-        <button class="chip" data-range="1w" type="button">1w</button>
-        <button class="chip" data-range="1m" type="button">1m</button>
-        <button class="chip" data-range="all" type="button">All</button>
-      </div>
-    </div>
-    <div id="chart"></div>
-    <div class="legend">
-      <span class="lg"><i class="lg-dot"></i>daily weigh-in</span>
-      <span class="lg"><i class="lg-line"></i>7-day average</span>
-      <span class="lg"><i class="lg-goal"></i>goal</span>
-    </div>
-  </section>
+      <section class="card">
+        <div class="card-head"><h2>Strength check</h2><span class="hint">best set after training — the canary for muscle</span></div>
+        <form class="lift" id="liftForm">
+          <select id="l-lift"></select>
+          <input type="number" step="0.5" inputmode="decimal" id="l-w" placeholder="kg">
+          <input type="number" step="1" inputmode="numeric" id="l-reps" placeholder="reps">
+          <button class="btn row-add" id="saveSet" type="submit">Save set</button>
+        </form>
+        <div id="liftList"></div>
+      </section>
+    </section>
 
-  <section>
-    <div class="card-head" style="margin-bottom:10px;padding:0 2px;">
-      <h2>Guardrails</h2>
-      <span class="hint">last 7 logged days</span>
-    </div>
-    <div class="guardrails" id="guardrails"></div>
-  </section>
+    <section class="page" id="page-home">
+      <section class="verdict" id="verdict"></section>
 
-  <section class="card">
-    <div class="card-head"><h2>Progress to goal</h2><span class="hint" id="progHint"></span></div>
-    <div class="goals" id="progress"></div>
-  </section>
+      <section class="readouts" id="readouts"></section>
 
-  <section class="card">
-    <div class="card-head"><h2>Log a day</h2><span class="hint">log as you go — grey numbers are already saved</span></div>
-    <form class="log" id="logForm">
-      <div class="field"><label for="f-date">Date</label><input type="date" id="f-date" required></div>
-      <div class="field"><label for="f-weight">Weight kg</label><input type="number" step="0.01" inputmode="decimal" id="f-weight" placeholder="—"></div>
-      <div class="field"><label for="f-kcal">kcal</label><input type="number" step="1" inputmode="numeric" id="f-kcal" placeholder="—"></div>
-      <div class="field"><label for="f-protein">Protein g</label><input type="number" step="1" inputmode="numeric" id="f-protein" placeholder="—"></div>
-      <div class="field"><label for="f-steps">Steps</label><input type="number" step="1" inputmode="numeric" id="f-steps" placeholder="—"></div>
-      <button class="btn row-add" id="saveDay" type="submit">Save day</button>
-    </form>
-    <div class="loglist" id="logList"></div>
-  </section>
+      <section class="card chart-card">
+        <div class="card-head">
+          <h2>Weight trend</h2>
+          <div class="chips" id="rangeChips">
+            <button class="chip" data-range="1w" type="button">1w</button>
+            <button class="chip" data-range="1m" type="button">1m</button>
+            <button class="chip" data-range="all" type="button">All</button>
+          </div>
+        </div>
+        <div id="chart"></div>
+        <div class="legend">
+          <span class="lg"><i class="lg-dot"></i>daily weigh-in</span>
+          <span class="lg"><i class="lg-line"></i>7-day average</span>
+          <span class="lg"><i class="lg-goal"></i>goal</span>
+        </div>
+      </section>
 
-  <section class="card">
-    <div class="card-head"><h2>Strength check</h2><span class="hint">best set after training — the canary for muscle</span></div>
-    <form class="lift" id="liftForm">
-      <select id="l-lift"></select>
-      <input type="number" step="0.5" inputmode="decimal" id="l-w" placeholder="kg">
-      <input type="number" step="1" inputmode="numeric" id="l-reps" placeholder="reps">
-      <button class="btn row-add" id="saveSet" type="submit">Save set</button>
-    </form>
-    <div id="liftList"></div>
-  </section>
+      <section>
+        <div class="card-head" style="margin-bottom:10px;padding:0 2px;">
+          <h2>Guardrails</h2>
+          <span class="hint">last 7 logged days</span>
+        </div>
+        <div class="guardrails" id="guardrails"></div>
+      </section>
 
-  <section class="card">
-    <div class="card-head"><h2>Coach's report</h2><span class="hint">AI read of your last two weeks</span></div>
-    <div id="aiOut" class="ai-out"></div>
-    <button class="btn ghost" id="aiBtn" type="button">Analyze my week</button>
-    <div class="field" style="margin-top:10px">
-      <label for="aiKey">Anthropic API key — optional; stays on this device, never included in backups</label>
-      <input type="password" id="aiKey" placeholder="sk-ant-… (without one, the button copies a prompt for the Claude app)">
-    </div>
-  </section>
+      <section class="card">
+        <div class="card-head"><h2>Progress to goal</h2><span class="hint" id="progHint"></span></div>
+        <div class="goals" id="progress"></div>
+      </section>
+    </section>
 
-  <details class="card settings">
-    <summary>Targets &amp; data</summary>
-    <div class="settings-grid" id="settings"></div>
-    <div class="settings-actions">
-      <button class="btn ghost" id="saveCfg" type="button">Save targets</button>
-      <button class="btn ghost" id="exportBtn" type="button">Export backup</button>
-      <button class="btn ghost" id="importBtn" type="button">Import backup</button>
-      <button class="btn ghost" id="healthBtn" type="button">Import from Health</button>
-      <input type="file" id="importFile" accept="application/json" hidden>
-    </div>
-    <div class="backup-status" id="backupStatus"></div>
-  </details>
+    <section class="page" id="page-coach">
+      <section class="card">
+        <div class="card-head"><h2>Coach's report</h2><span class="hint">AI read of your last two weeks</span></div>
+        <div id="aiOut" class="ai-out"></div>
+        <button class="btn ghost" id="aiBtn" type="button">Analyze my week</button>
+        <div class="field" style="margin-top:10px">
+          <label for="aiKey">Anthropic API key — optional; stays on this device, never included in backups</label>
+          <input type="password" id="aiKey" placeholder="sk-ant-… (without one, the button copies a prompt for the Claude app)">
+        </div>
+      </section>
 
-  <footer>
-    All data stays on this device (local storage). Judge by the weekly average, not the daily number.<br>
-    <a class="reset" id="resetBtn">Reset to defaults</a>
-  </footer>
+      <details class="card settings">
+        <summary>Targets &amp; data</summary>
+        <div class="settings-grid" id="settings"></div>
+        <div class="settings-actions">
+          <button class="btn ghost" id="saveCfg" type="button">Save targets</button>
+          <button class="btn ghost" id="exportBtn" type="button">Export backup</button>
+          <button class="btn ghost" id="importBtn" type="button">Import backup</button>
+          <button class="btn ghost" id="healthBtn" type="button">Import from Health</button>
+          <input type="file" id="importFile" accept="application/json" hidden>
+        </div>
+        <div class="backup-status" id="backupStatus"></div>
+      </details>
+
+      <footer>
+        All data stays on this device (local storage). Judge by the weekly average, not the daily number.<br>
+        <a class="reset" id="resetBtn">Reset to defaults</a>
+      </footer>
+    </section>
+
+  </div>
+
+  <nav class="tabbar" id="tabbar">
+    <button class="tab" data-page="page-log" type="button">
+      <svg viewBox="0 0 20 20" fill="none"><path d="M4 6h12M4 10h12M4 14h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <span>Log</span>
+    </button>
+    <button class="tab active" data-page="page-home" type="button">
+      <svg viewBox="0 0 20 20" fill="none"><path d="M3 13l4-4 3 3 6-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="16" cy="5" r="1.6" fill="currentColor"/></svg>
+      <span>Overview</span>
+    </button>
+    <button class="tab" data-page="page-coach" type="button">
+      <svg viewBox="0 0 20 20" fill="none"><path d="M4 4.5h12a1.5 1.5 0 0 1 1.5 1.5v6a1.5 1.5 0 0 1-1.5 1.5H9l-3.5 3v-3H4A1.5 1.5 0 0 1 2.5 12V6A1.5 1.5 0 0 1 4 4.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      <span>Coach</span>
+    </button>
+  </nav>
 </main>
 
 <script>
@@ -1335,6 +1395,42 @@
   renderSettings();
   render();
   renderBackupStatus();
+
+  // ---------- pager: swipe/tap between Log · Overview · Coach ----------
+  (function () {
+    const pager = document.getElementById("pager");
+    if (!pager) return;
+    const tabs = Array.from(document.querySelectorAll(".tab"));
+    const pageIds = tabs.map(t => t.dataset.page);
+
+    function setActive(id) {
+      tabs.forEach(t => t.classList.toggle("active", t.dataset.page === id));
+    }
+    // Index-based, not offsetLeft-based: offsetLeft is relative to the
+    // nearest *positioned* ancestor, which neither .pager nor .page are —
+    // it fell back to <body> and picked up .app's horizontal centering
+    // margin, landing on the wrong page. clientWidth * index is unambiguous.
+    function goTo(id, smooth) {
+      const idx = pageIds.indexOf(id);
+      if (idx < 0) return;
+      const left = idx * pager.clientWidth;
+      if (smooth) pager.scrollTo({ left, behavior: "smooth" });
+      else pager.scrollLeft = left;
+      setActive(id);
+    }
+    tabs.forEach(t => t.addEventListener("click", () => goTo(t.dataset.page, true)));
+
+    let scrollTimer;
+    pager.addEventListener("scroll", () => {
+      clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(() => {
+        const idx = Math.max(0, Math.min(pageIds.length - 1, Math.round(pager.scrollLeft / pager.clientWidth)));
+        setActive(pageIds[idx]);
+      }, 60);
+    });
+
+    goTo("page-home", false); // land on Overview by default, no animation
+  })();
 
   // Offline support when self-hosted (GitHub Pages). No-ops on the claude.ai
   // artifact, whose CSP has no sw.js to serve — hence the silent catch.
