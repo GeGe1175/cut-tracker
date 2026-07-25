@@ -187,7 +187,7 @@
   .vseg { cursor: pointer; }
 
   /* ---- Readouts row ---- */
-  .readouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .readouts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .stat {
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm);
     padding: 12px 12px 11px; box-shadow: var(--shadow);
@@ -325,7 +325,7 @@
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
   @media (max-width: 420px) {
-    .readouts { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .readouts { grid-template-columns: repeat(2, 1fr); gap: 8px; }
     .stat .val { font-size: 19px; }
     form.log { grid-template-columns: repeat(2, 1fr); }
   }
@@ -900,8 +900,6 @@
     }
     document.getElementById("readouts").innerHTML =
       stat("Trend weight", fmt(m.trendWeight, 2), "kg", "7-day average", true) +
-      stat("This week", m.rate != null ? (m.rate >= 0 ? "−" : "+") + fmt(Math.abs(m.rate), 2) : "—", "kg/wk",
-        (m.rate != null ? "target −" + c.rateLo + " to −" + c.rateHi : "need more data"), false) +
       stat("Lost so far", lost != null ? (lost >= 0 ? "" : "+") + fmt(Math.abs(lost), 2) : "—", "kg", lostCap, false);
 
     // guardrails
