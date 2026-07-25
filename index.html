@@ -890,8 +890,11 @@
         const ref = m.trend.find(p => p.x > m.latest - rangeSpan);
         if (ref) {
           lost = ref.y - m.trendWeight;
-          const actualDays = m.latest - ref.x;
-          lostCap = actualDays > 0 ? "in past " + actualDays + " days" : "no change yet";
+          // +1: the window spans from ref's day through today INCLUSIVE
+          // (matches the chart's own strict-> filter, which for "1w" keeps
+          // latest-6..latest — 7 distinct days, not 6).
+          const actualDays = m.latest - ref.x + 1;
+          lostCap = ref.x < m.latest ? "in past " + actualDays + " days" : "no change yet";
         }
       }
     }
