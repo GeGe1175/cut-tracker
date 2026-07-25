@@ -876,13 +876,30 @@
 
     // readouts
     const daysIn = m.weights.length ? (dnum(m.weights[m.weights.length - 1].date) - dnum(c.startDate)) : 0;
-    const lost = m.trendWeight != null ? c.startWeight - m.trendWeight : null;
+    // "Lost so far" tracks whichever chart range (1w/1m/All) is selected —
+    // All uses the true cut-start anchor; 1w/1m compare against the earliest
+    // trend point actually shown in that window, so it matches the chart.
+    const RANGE_DAYS = { "1w": 7, "1m": 30 };
+    const rangeSpan = RANGE_DAYS[c.chartRange];
+    let lost = null, lostCap = "since start";
+    if (m.trendWeight != null) {
+      if (!rangeSpan) {
+        lost = c.startWeight - m.trendWeight;
+        lostCap = daysIn > 0 ? "in " + daysIn + " days" : "since start";
+      } else {
+        const ref = m.trend.find(p => p.x > m.latest - rangeSpan);
+        if (ref) {
+          lost = ref.y - m.trendWeight;
+          const actualDays = m.latest - ref.x;
+          lostCap = actualDays > 0 ? "in past " + actualDays + " days" : "no change yet";
+        }
+      }
+    }
     document.getElementById("readouts").innerHTML =
       stat("Trend weight", fmt(m.trendWeight, 2), "kg", "7-day average", true) +
       stat("This week", m.rate != null ? (m.rate >= 0 ? "−" : "+") + fmt(Math.abs(m.rate), 2) : "—", "kg/wk",
         (m.rate != null ? "target −" + c.rateLo + " to −" + c.rateHi : "need more data"), false) +
-      stat("Lost so far", lost != null ? (lost >= 0 ? "" : "+") + fmt(Math.abs(lost) * (lost < 0 ? 1 : 1), 2) : "—", "kg",
-        daysIn > 0 ? "in " + daysIn + " days" : "since start", false);
+      stat("Lost so far", lost != null ? (lost >= 0 ? "" : "+") + fmt(Math.abs(lost), 2) : "—", "kg", lostCap, false);
 
     // guardrails
     document.getElementById("guardrails").innerHTML = guards.map(g => {
