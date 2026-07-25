@@ -771,8 +771,8 @@
       cx.tip.style.opacity = "1";
       cx.tip.style.left = (gx / cx.W * 100) + "%";
       cx.tip.style.top = (gy / cx.H * 100) + "%";
-      cx.tip.innerHTML = '<span class="t-date">' + p.date + '</span><br><b>' + p.y.toFixed(1) + '</b> kg' +
-        (t ? ' · <b>' + t.y.toFixed(1) + '</b> avg' : "");
+      cx.tip.innerHTML = '<span class="t-date">' + p.date + '</span><br><b>' + p.y.toFixed(2) + '</b> kg' +
+        (t ? ' · <b>' + t.y.toFixed(2) + '</b> avg' : "");
     }
     function leave() { cross.style.opacity = "0"; foc.style.opacity = "0"; cx.tip.style.opacity = "0"; }
     cx.svg.addEventListener("pointermove", move);
@@ -818,10 +818,10 @@
     const daysIn = m.weights.length ? (dnum(m.weights[m.weights.length - 1].date) - dnum(c.startDate)) : 0;
     const lost = m.trendWeight != null ? c.startWeight - m.trendWeight : null;
     document.getElementById("readouts").innerHTML =
-      stat("Trend weight", fmt(m.trendWeight, 1), "kg", "7-day average", true) +
+      stat("Trend weight", fmt(m.trendWeight, 2), "kg", "7-day average", true) +
       stat("This week", m.rate != null ? (m.rate >= 0 ? "−" : "+") + fmt(Math.abs(m.rate), 2) : "—", "kg/wk",
         (m.rate != null ? "target −" + c.rateLo + " to −" + c.rateHi : "need more data"), false) +
-      stat("Lost so far", lost != null ? (lost >= 0 ? "" : "+") + fmt(Math.abs(lost) * (lost < 0 ? 1 : 1), 1) : "—", "kg",
+      stat("Lost so far", lost != null ? (lost >= 0 ? "" : "+") + fmt(Math.abs(lost) * (lost < 0 ? 1 : 1), 2) : "—", "kg",
         daysIn > 0 ? "in " + daysIn + " days" : "since start", false);
 
     // guardrails
@@ -883,7 +883,7 @@
     const c = state.config, box = document.getElementById("progress");
     if (m.trendWeight == null) { box.innerHTML = '<div class="chart-empty" style="padding:20px 0">Log a weigh-in to track progress.</div>'; document.getElementById("progHint").textContent = ""; return; }
     const tw = m.trendWeight, start = c.startWeight;
-    document.getElementById("progHint").textContent = "trend " + fmt(tw, 1) + " kg";
+    document.getElementById("progHint").textContent = "trend " + fmt(tw, 2) + " kg";
     function goalRow(name, pct, target) {
       const total = start - target, done = start - tw;
       const frac = total > 0 ? Math.max(0, Math.min(1, done / total)) : 1;
@@ -897,7 +897,7 @@
       } else if (reached) { eta = "reached"; } else { eta = "—"; }
       return '<div class="goal' + (reached ? " done" : "") + '">' +
         '<div class="goal-top"><div class="goal-name">' + name + ' <span>' + fmt(target, 1) + ' kg</span></div>' +
-        '<div class="goal-meta">' + (reached ? "done" : fmt(toGo, 1) + " kg to go") + '</div></div>' +
+        '<div class="goal-meta">' + (reached ? "done" : fmt(toGo, 2) + " kg to go") + '</div></div>' +
         '<div class="bar"><i style="width:' + (frac * 100).toFixed(1) + '%"></i></div>' +
         '<div class="goal-meta" style="margin-top:5px">' + eta + '</div></div>';
     }
@@ -916,7 +916,7 @@
       '<button class="swipe-del" data-date="' + e.date + '">Delete</button>' +
       '<div class="logrow" data-date="' + e.date + '">' +
       '<span class="d">' + shortDate(e.date) + '</span>' +
-      '<span class="m' + (e.weight == null ? " empty" : "") + '">' + (e.weight == null ? "—" : fmt(e.weight, 1) + '<span class="u"> kg</span>') + '</span>' +
+      '<span class="m' + (e.weight == null ? " empty" : "") + '">' + (e.weight == null ? "—" : fmt(e.weight, 2) + '<span class="u"> kg</span>') + '</span>' +
       '<span class="m' + (e.kcal == null ? " empty" : "") + '">' + (e.kcal == null ? "—" : fmtInt(e.kcal)) + '</span>' +
       '<span class="m' + (e.protein == null ? " empty" : "") + '">' + (e.protein == null ? "—" : fmtInt(e.protein) + '<span class="u"> g</span>') + '</span>' +
       '<span class="m' + (e.steps == null ? " empty" : "") + '">' + (e.steps == null ? "—" : fmtInt(e.steps)) + '</span>' +
