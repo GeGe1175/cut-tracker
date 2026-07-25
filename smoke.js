@@ -99,6 +99,39 @@ setTimeout(() => {
   eval(html.match(/<script>([\s\S]*)<\/script>/)[1]);
   expect("strength drop flags crit", /strength/i.test(strip(rendered["verdict"])), strip(rendered["verdict"]));
 
-  console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL PASS");
-  process.exit(failures ? 1 : 0);
+  // 7. Chat: a food photo/description round-trips through Claude tool-use
+  // and produces a taggable kcal/protein/carbs/fat estimate in state.chat.
+  store["cutTracker.apiKey"] = "fake-key-for-test";
+  let lastFetchBody = null;
+  global.fetch = async (url, opts) => {
+    lastFetchBody = JSON.parse(opts.body);
+    return {
+      json: async () => ({
+        content: [
+          { type: "text", text: "Looks like a solid protein bowl." },
+          { type: "tool_use", name: "log_food_estimate",
+            input: { food_description: "chicken rice bowl", kcal: 620, protein: 52, carbs: 55, fat: 18 } }
+        ]
+      })
+    };
+  };
+  $("chatText").value = "chicken rice bowl for lunch";
+  $("chatForm")._fire("submit");
+  setTimeout(() => {
+    expect("chat request includes the user message",
+      lastFetchBody && lastFetchBody.messages.length === 1 && lastFetchBody.tools[0].name === "log_food_estimate",
+      JSON.stringify(lastFetchBody && lastFetchBody.messages));
+
+    const chat = JSON.parse(store["cutTracker.v1"]).chat;
+    const reply = chat[1];
+    expect("chat tool-use response captures kcal/protein/carbs/fat",
+      reply && reply.kcal === 620 && reply.protein === 52 && reply.carbs === 55 && reply.fat === 18,
+      JSON.stringify(reply));
+    expect("chat renders an add-to-today button with all four macros",
+      /\+ Add 620 kcal, 52g protein, 55g carbs, 18g fat to today/.test(strip(rendered["chatList"])),
+      strip(rendered["chatList"]));
+
+    console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL PASS");
+    process.exit(failures ? 1 : 0);
+  }, 10);
 }, 10);

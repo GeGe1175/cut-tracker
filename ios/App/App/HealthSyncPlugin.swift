@@ -11,10 +11,20 @@ public class HealthSyncPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "HealthSyncPlugin"
     public let jsName = "HealthSync"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "readDaily", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "readDaily", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "writeFood", returnType: CAPPluginReturnPromise)
     ]
 
     private let store = HKHealthStore()
+
+    private var nutritionShareTypes: Set<HKSampleType> {
+        [
+            HKObjectType.quantityType(forIdentifier: .dietaryEnergyConsumed)!,
+            HKObjectType.quantityType(forIdentifier: .dietaryProtein)!,
+            HKObjectType.quantityType(forIdentifier: .dietaryCarbohydrates)!,
+            HKObjectType.quantityType(forIdentifier: .dietaryFatTotal)!,
+        ]
+    }
 
     @objc func readDaily(_ call: CAPPluginCall) {
         guard HKHealthStore.isHealthDataAvailable() else {
@@ -27,13 +37,66 @@ public class HealthSyncPlugin: CAPPlugin, CAPBridgedPlugin {
             HKObjectType.quantityType(forIdentifier: .bodyMass)!,
             HKObjectType.quantityType(forIdentifier: .dietaryEnergyConsumed)!,
             HKObjectType.quantityType(forIdentifier: .dietaryProtein)!,
+            HKObjectType.quantityType(forIdentifier: .dietaryCarbohydrates)!,
+            HKObjectType.quantityType(forIdentifier: .dietaryFatTotal)!,
         ]
-        store.requestAuthorization(toShare: nil, read: readTypes) { _, error in
+        // Request write access here too so the very first Health prompt covers
+        // both read and share — writeFood() re-requests (a no-op if already
+        // granted) but users who never open Chat shouldn't get a second prompt
+        // the first time they do.
+        store.requestAuthorization(toShare: nutritionShareTypes, read: readTypes) { _, error in
             if let error = error {
                 call.reject(error.localizedDescription)
                 return
             }
             self.query(days: days, call: call)
+        }
+    }
+
+    @objc func writeFood(_ call: CAPPluginCall) {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            call.reject("Health data is not available on this device")
+            return
+        }
+        guard let dateStr = call.getString("date") else {
+            call.reject("Missing date"); return
+        }
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        fmt.timeZone = TimeZone.current
+        guard let day = fmt.date(from: dateStr) else {
+            call.reject("Bad date"); return
+        }
+        // Anchor the sample to "now" if the date is today (so it sits at the
+        // actual logging time), otherwise noon on that day — HealthKit has no
+        // "unspecified time" concept for quantity samples.
+        let cal = Calendar.current
+        let sampleDate = cal.isDateInToday(day) ? Date() : cal.date(bySettingHour: 12, minute: 0, second: 0, of: day)!
+
+        store.requestAuthorization(toShare: nutritionShareTypes, read: []) { _, error in
+            if let error = error {
+                call.reject(error.localizedDescription)
+                return
+            }
+            var samples: [HKQuantitySample] = []
+            func addSample(_ id: HKQuantityTypeIdentifier, unit: HKUnit, value: Double?) {
+                guard let value = value, value > 0 else { return }
+                let type = HKQuantityType.quantityType(forIdentifier: id)!
+                let qty = HKQuantity(unit: unit, doubleValue: value)
+                samples.append(HKQuantitySample(type: type, quantity: qty, start: sampleDate, end: sampleDate))
+            }
+            addSample(.dietaryEnergyConsumed, unit: .kilocalorie(), value: call.getDouble("kcal"))
+            addSample(.dietaryProtein, unit: .gram(), value: call.getDouble("protein"))
+            addSample(.dietaryCarbohydrates, unit: .gram(), value: call.getDouble("carbs"))
+            addSample(.dietaryFatTotal, unit: .gram(), value: call.getDouble("fat"))
+            guard !samples.isEmpty else { call.resolve(["saved": 0]); return }
+            self.store.save(samples) { success, error in
+                if let error = error {
+                    call.reject(error.localizedDescription)
+                } else {
+                    call.resolve(["saved": success ? samples.count : 0])
+                }
+            }
         }
     }
 
@@ -49,6 +112,8 @@ public class HealthSyncPlugin: CAPPlugin, CAPBridgedPlugin {
         let group = DispatchGroup()
         var kcal: [String: Double] = [:]
         var protein: [String: Double] = [:]
+        var carbs: [String: Double] = [:]
+        var fat: [String: Double] = [:]
         var steps: [String: Double] = [:]
         var weight: [String: Double] = [:]
         let lock = NSLock()
@@ -75,6 +140,8 @@ public class HealthSyncPlugin: CAPPlugin, CAPBridgedPlugin {
 
         dailySum(.dietaryEnergyConsumed, unit: .kilocalorie()) { d, v in kcal[d] = v }
         dailySum(.dietaryProtein, unit: .gram()) { d, v in protein[d] = v }
+        dailySum(.dietaryCarbohydrates, unit: .gram()) { d, v in carbs[d] = v }
+        dailySum(.dietaryFatTotal, unit: .gram()) { d, v in fat[d] = v }
         dailySum(.stepCount, unit: .count()) { d, v in steps[d] = v }
 
         // Body weight: keep each day's latest sample, in kg.
@@ -95,6 +162,8 @@ public class HealthSyncPlugin: CAPPlugin, CAPBridgedPlugin {
         group.notify(queue: .main) {
             var dates = Set(kcal.keys)
             dates.formUnion(protein.keys)
+            dates.formUnion(carbs.keys)
+            dates.formUnion(fat.keys)
             dates.formUnion(steps.keys)
             dates.formUnion(weight.keys)
             let rows: [[String: Any]] = dates.sorted().map { d in
@@ -102,6 +171,8 @@ public class HealthSyncPlugin: CAPPlugin, CAPBridgedPlugin {
                 if let v = weight[d] { row["weight"] = (v * 100).rounded() / 100 }
                 if let v = kcal[d] { row["kcal"] = v.rounded() }
                 if let v = protein[d] { row["protein"] = v.rounded() }
+                if let v = carbs[d] { row["carbs"] = v.rounded() }
+                if let v = fat[d] { row["fat"] = v.rounded() }
                 if let v = steps[d] { row["steps"] = v.rounded() }
                 return row
             }
