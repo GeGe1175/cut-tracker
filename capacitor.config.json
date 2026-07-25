@@ -3,7 +3,7 @@
   "appName": "Cut Tracker",
   "webDir": "www",
   "ios": {
-    "contentInset": "automatic"
+    "contentInset": "never"
   },
   "packageClassList": ["HealthSyncPlugin"]
 }

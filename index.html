@@ -97,7 +97,7 @@
   }
   h1, h2, h3 { margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
 
-  header { flex-shrink: 0; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 16px 16px 10px; }
+  header { flex-shrink: 0; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: calc(16px + env(safe-area-inset-top)) 16px 10px; }
   header h1 { font-family: var(--display); font-size: 27px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; line-height: 0.95; }
   header .sub { margin: 4px 0 0; color: var(--ink-faint); font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase; }
   .daybox { text-align: right; flex-shrink: 0; }
@@ -273,7 +273,6 @@
   }
   .btn:hover { filter: brightness(1.06); }
   .btn.ghost { background: var(--surface-2); color: var(--ink-muted); }
-  .btn.del-day { margin-top: 8px; color: var(--crit); }
   .btn.row-add { grid-column: 1 / -1; }
   form.lift { display: grid; grid-template-columns: 1.7fr 1fr 1fr; gap: 8px; margin-bottom: 12px; }
   .liftrow {
@@ -323,7 +322,6 @@
   .backup-status.due { color: var(--warn); font-weight: 600; }
 
   footer { text-align: center; color: var(--ink-faint); font-size: 11px; line-height: 1.6; padding: 4px 8px; }
-  a.reset { color: var(--ink-faint); text-decoration: underline; cursor: pointer; }
 
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
   @media (max-width: 420px) {
@@ -357,7 +355,6 @@
           <div class="field"><label for="f-protein">Protein g</label><input type="number" step="1" inputmode="numeric" id="f-protein" placeholder="—"></div>
           <div class="field"><label for="f-steps">Steps</label><input type="number" step="1" inputmode="numeric" id="f-steps" placeholder="—"></div>
           <button class="btn row-add" id="saveDay" type="submit">Save day</button>
-          <button class="btn ghost row-add del-day" id="deleteDayBtn" type="button" hidden>Delete this day</button>
         </form>
         <div class="loglist" id="logList"></div>
       </section>
@@ -441,8 +438,7 @@
       </details>
 
       <footer>
-        All data stays on this device (local storage). Judge by the weekly average, not the daily number.<br>
-        <a class="reset" id="resetBtn">Reset to defaults</a>
+        All data stays on this device (local storage). Judge by the weekly average, not the daily number.
       </footer>
     </section>
 
@@ -1053,15 +1049,8 @@
       const v = e ? e[k] : null;
       document.getElementById(id).placeholder = v == null ? "—" : v;
     });
-    document.getElementById("deleteDayBtn").hidden = !e;
   }
   document.getElementById("f-date").addEventListener("change", syncLogForm);
-  document.getElementById("deleteDayBtn").addEventListener("click", () => {
-    const date = document.getElementById("f-date").value;
-    if (!confirm("Delete the entry for " + date + "? This can't be undone (and Health auto-sync will refill it if it's within the last 14 days).")) return;
-    state.entries = state.entries.filter(x => x.date !== date);
-    save(); render();
-  });
 
   const CFG_FIELDS = [
     ["calTarget", "Calorie target"], ["rmr", "RMR floor"], ["proteinTarget", "Protein target g"],
@@ -1354,12 +1343,6 @@
       btn.disabled = false;
       out.textContent = "Couldn't reach the AI service — check your connection (this feature needs the GitHub Pages version, not the claude.ai artifact).";
     });
-  });
-
-  document.getElementById("resetBtn").addEventListener("click", () => {
-    if (confirm("Reset all data and targets to defaults? Your logged days will be cleared.")) {
-      state = JSON.parse(JSON.stringify(DEFAULTS)); save(); renderSettings(); render();
-    }
   });
 
   renderSettings();
