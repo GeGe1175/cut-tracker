@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <!-- Capacitor's JS runtime (registerPlugin, etc.) — only present in the native
      iOS build's www/ bundle; 404s harmlessly on GitHub Pages / the artifact. -->
 <script src="capacitor.js"></script>
@@ -273,6 +273,7 @@
   }
   .btn:hover { filter: brightness(1.06); }
   .btn.ghost { background: var(--surface-2); color: var(--ink-muted); }
+  .btn.del-day { margin-top: 8px; color: var(--crit); }
   .btn.row-add { grid-column: 1 / -1; }
   form.lift { display: grid; grid-template-columns: 1.7fr 1fr 1fr; gap: 8px; margin-bottom: 12px; }
   .liftrow {
@@ -288,15 +289,11 @@
   .logrow {
     display: grid; grid-template-columns: 78px 1fr 1fr 1fr 1fr; align-items: center; gap: 8px;
     padding: 9px 2px; font-size: 13px;
-    background: var(--surface); position: relative;
-    touch-action: pan-y; transition: transform 0.18s ease;
+    background: var(--surface); border-top: 1px solid var(--border);
   }
-  .logwrap { position: relative; overflow: hidden; border-top: 1px solid var(--border); }
-  .logwrap .swipe-del {
-    position: absolute; top: 0; right: 0; bottom: 0; width: 72px; border: none;
-    background: var(--crit); color: #fff; font-size: 12px; font-weight: 600; cursor: pointer;
-  }
+  .logrow:first-child { border-top: 0; }
   .logrow[data-date] { cursor: pointer; }
+  .logrow[data-date]:active { background: var(--surface-2); }
   .logrow .d { color: var(--ink-muted); font-size: 12px; }
   .logrow .m { font-family: var(--mono); font-variant-numeric: tabular-nums; }
   .logrow .m .u { color: var(--ink-faint); font-size: 10.5px; }
@@ -360,6 +357,7 @@
           <div class="field"><label for="f-protein">Protein g</label><input type="number" step="1" inputmode="numeric" id="f-protein" placeholder="—"></div>
           <div class="field"><label for="f-steps">Steps</label><input type="number" step="1" inputmode="numeric" id="f-steps" placeholder="—"></div>
           <button class="btn row-add" id="saveDay" type="submit">Save day</button>
+          <button class="btn ghost row-add del-day" id="deleteDayBtn" type="button" hidden>Delete this day</button>
         </form>
         <div class="loglist" id="logList"></div>
       </section>
@@ -423,17 +421,23 @@
         </div>
       </section>
 
-      <details class="card settings">
-        <summary>Targets &amp; data</summary>
-        <div class="settings-grid" id="settings"></div>
+      <section class="card">
+        <div class="card-head"><h2>Data</h2><span class="hint">backup &amp; sync</span></div>
         <div class="settings-actions">
-          <button class="btn ghost" id="saveCfg" type="button">Save targets</button>
           <button class="btn ghost" id="exportBtn" type="button">Export backup</button>
           <button class="btn ghost" id="importBtn" type="button">Import backup</button>
           <button class="btn ghost" id="healthBtn" type="button">Import from Health</button>
           <input type="file" id="importFile" accept="application/json" hidden>
         </div>
         <div class="backup-status" id="backupStatus"></div>
+      </section>
+
+      <details class="card settings">
+        <summary>Targets</summary>
+        <div class="settings-grid" id="settings"></div>
+        <div class="settings-actions">
+          <button class="btn ghost" id="saveCfg" type="button">Save targets</button>
+        </div>
       </details>
 
       <footer>
@@ -972,15 +976,13 @@
     if (!es.length) { box.innerHTML = '<div class="chart-empty" style="padding:16px 0">No entries yet.</div>'; return; }
     let html = '<div class="logrow head"><span class="h">Date</span><span class="h">Weight</span><span class="h">kcal</span><span class="h">Protein</span><span class="h">Steps</span></div>';
     html += es.map(e =>
-      '<div class="logwrap">' +
-      '<button class="swipe-del" data-date="' + e.date + '">Delete</button>' +
       '<div class="logrow" data-date="' + e.date + '">' +
       '<span class="d">' + shortDate(e.date) + '</span>' +
       '<span class="m' + (e.weight == null ? " empty" : "") + '">' + (e.weight == null ? "—" : fmt(e.weight, 2) + '<span class="u"> kg</span>') + '</span>' +
       '<span class="m' + (e.kcal == null ? " empty" : "") + '">' + (e.kcal == null ? "—" : fmtInt(e.kcal)) + '</span>' +
       '<span class="m' + (e.protein == null ? " empty" : "") + '">' + (e.protein == null ? "—" : fmtInt(e.protein) + '<span class="u"> g</span>') + '</span>' +
       '<span class="m' + (e.steps == null ? " empty" : "") + '">' + (e.steps == null ? "—" : fmtInt(e.steps)) + '</span>' +
-      '</div></div>'
+      '</div>'
     ).join("");
     if (all.length > 14) {
       html += '<button class="logmore" type="button">' +
@@ -990,61 +992,22 @@
     box.querySelectorAll(".logmore").forEach(b => b.addEventListener("click", () => {
       showAllLog = !showAllLog; renderLog();
     }));
-    box.querySelectorAll(".swipe-del").forEach(b => b.addEventListener("click", () => {
-      state.entries = state.entries.filter(x => x.date !== b.dataset.date); save(); render();
-    }));
-    box.querySelectorAll(".logrow[data-date]").forEach(attachRowGestures);
-  }
-
-  // Swipe a row left to reveal Delete (two-step, so no accidental deletes);
-  // a plain tap loads the day back into the form for editing.
-  let openRow = null;
-  function closeOpenRow() {
-    if (openRow) { openRow.style.transform = ""; openRow = null; }
-  }
-  function attachRowGestures(row) {
-    const OPEN = -76;
-    let sx = 0, sy = 0, dx = 0, dragging = false, horiz = null;
-    row.addEventListener("pointerdown", ev => {
-      sx = ev.clientX; sy = ev.clientY; dx = row === openRow ? OPEN : 0;
-      dragging = true; horiz = null;
+    // Tap a row to load it into the form for editing (or deleting via the
+    // form's own Delete this day button — see syncLogForm). No swipe gesture:
+    // that fought with the page-pager's own horizontal swipe on-device.
+    box.querySelectorAll(".logrow[data-date]").forEach(row => {
+      row.addEventListener("click", () => {
+        const e = state.entries.find(x => x.date === row.dataset.date);
+        if (!e) return;
+        document.getElementById("f-date").value = e.date;
+        document.getElementById("f-weight").value = e.weight == null ? "" : e.weight;
+        document.getElementById("f-kcal").value = e.kcal == null ? "" : e.kcal;
+        document.getElementById("f-protein").value = e.protein == null ? "" : e.protein;
+        document.getElementById("f-steps").value = e.steps == null ? "" : e.steps;
+        syncLogForm();
+        document.getElementById("logForm").scrollIntoView({ behavior: "smooth", block: "center" });
+      });
     });
-    row.addEventListener("pointermove", ev => {
-      if (!dragging) return;
-      const mx = ev.clientX - sx, my = ev.clientY - sy;
-      if (horiz == null && (Math.abs(mx) > 8 || Math.abs(my) > 8)) horiz = Math.abs(mx) > Math.abs(my);
-      if (!horiz) return;
-      dx = Math.max(OPEN - 16, Math.min(0, mx + (row === openRow ? OPEN : 0)));
-      row.style.transform = "translateX(" + dx + "px)";
-    });
-    const settle = () => {
-      if (!dragging) return false;
-      dragging = false;
-      if (horiz) {
-        if (dx < OPEN / 2) {
-          if (openRow && openRow !== row) closeOpenRow();
-          openRow = row; row.style.transform = "translateX(" + OPEN + "px)";
-        } else {
-          row.style.transform = "";
-          if (openRow === row) openRow = null;
-        }
-        return false;
-      }
-      return true; // it was a tap
-    };
-    row.addEventListener("pointerup", () => {
-      if (!settle()) return;
-      if (openRow) { closeOpenRow(); return; }   // tap anywhere closes an open row
-      const e = state.entries.find(x => x.date === row.dataset.date);
-      if (!e) return;
-      document.getElementById("f-date").value = e.date;
-      document.getElementById("f-weight").value = e.weight == null ? "" : e.weight;
-      document.getElementById("f-kcal").value = e.kcal == null ? "" : e.kcal;
-      document.getElementById("f-protein").value = e.protein == null ? "" : e.protein;
-      document.getElementById("f-steps").value = e.steps == null ? "" : e.steps;
-      document.getElementById("logForm").scrollIntoView({ behavior: "smooth", block: "center" });
-    });
-    row.addEventListener("pointercancel", settle);
   }
 
   // ---------- form + settings wiring ----------
@@ -1090,8 +1053,15 @@
       const v = e ? e[k] : null;
       document.getElementById(id).placeholder = v == null ? "—" : v;
     });
+    document.getElementById("deleteDayBtn").hidden = !e;
   }
   document.getElementById("f-date").addEventListener("change", syncLogForm);
+  document.getElementById("deleteDayBtn").addEventListener("click", () => {
+    const date = document.getElementById("f-date").value;
+    if (!confirm("Delete the entry for " + date + "? This can't be undone (and Health auto-sync will refill it if it's within the last 14 days).")) return;
+    state.entries = state.entries.filter(x => x.date !== date);
+    save(); render();
+  });
 
   const CFG_FIELDS = [
     ["calTarget", "Calorie target"], ["rmr", "RMR floor"], ["proteinTarget", "Protein target g"],
