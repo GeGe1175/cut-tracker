@@ -1,6 +1,6 @@
 {
   "appId": "io.github.gege1175.cuttracker",
-  "appName": "Cut Tracker",
+  "appName": "Lokin",
   "webDir": "www",
   "ios": {
     "contentInset": "never"

@@ -2,7 +2,7 @@ import Foundation
 import Capacitor
 import HealthKit
 
-/// Reads the four quantities Cut Tracker cares about from Apple Health and
+/// Reads the four quantities Lokin cares about from Apple Health and
 /// returns per-day rows shaped exactly like the app's clipboard-import JSON:
 /// [{date: "yyyy-MM-dd", weight, kcal, protein, steps}] — so the JS side can
 /// reuse the existing parse/merge path unchanged.

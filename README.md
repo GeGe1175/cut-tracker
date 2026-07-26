@@ -1,6 +1,6 @@
-# Cut Tracker
+# Lokin
 
-Personal dashboard for cutting fat while keeping muscle. One self-contained HTML file — no build, no dependencies, data stays in the browser (localStorage).
+Personal dashboard for cutting fat while keeping muscle. One self-contained HTML file — no build, no dependencies, data stays in the browser (localStorage). (Repo/URL still say `cut-tracker` — see CLAUDE.md if renaming those too.)
 
 ## Run
 

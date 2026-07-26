@@ -1,6 +1,6 @@
-// Cut Tracker service worker: network-first, cache fallback.
+// Lokin service worker: network-first, cache fallback.
 // Fresh version whenever online; still opens offline (gym basement, plane).
-const CACHE = 'cut-tracker-v1';
+const CACHE = 'lokin-v1';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(

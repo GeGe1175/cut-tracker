@@ -8,10 +8,10 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Cut Tracker">
+<meta name="apple-mobile-web-app-title" content="Lokin">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<title>Cut Tracker</title>
+<title>Lokin</title>
 <style>
   :root {
     /* cool clinical neutrals — grey with a faint blue bias, chosen not defaulted */
@@ -370,7 +370,7 @@
 <main class="app">
   <header>
     <div>
-      <h1>Cut Tracker</h1>
+      <h1>Lokin</h1>
       <p class="sub">Fat down · muscle held</p>
     </div>
     <div class="daybox">
@@ -1213,10 +1213,10 @@
     const json = JSON.stringify(state, null, 2);
     // Fixed name (no date) so each export overwrites the last one, rather
     // than piling up a dated file per day — single canonical latest backup.
-    const filename = "cut-tracker-backup.json";
+    const filename = "lokin-backup.json";
     if (nativeFS && nativeShare) {
       nativeFS.writeFile({ path: filename, data: json, directory: "CACHE", encoding: "utf8" })
-        .then(res => nativeShare.share({ title: "Cut Tracker backup", url: res.uri }))
+        .then(res => nativeShare.share({ title: "Lokin backup", url: res.uri }))
         .then(() => markBackedUp())
         .catch(() => { btn.textContent = "Export failed"; setTimeout(() => { btn.textContent = "Export backup"; }, 2000); });
       return;

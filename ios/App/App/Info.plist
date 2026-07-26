@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Cut Tracker</string>
+	<string>Lokin</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -23,13 +23,13 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Cut Tracker uses your camera to photograph meals so the Coach chat can estimate calories and protein.</string>
+	<string>Lokin uses your camera to photograph meals so the Coach chat can estimate calories and protein.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Cut Tracker reads your weight, calories, protein, and steps from Apple Health to fill in your daily log.</string>
+	<string>Lokin reads your weight, calories, protein, and steps from Apple Health to fill in your daily log.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Cut Tracker writes calories, protein, carbs, and fat to Apple Health when you add a Coach chat meal estimate to your log.</string>
+	<string>Lokin writes calories, protein, carbs, and fat to Apple Health when you add a Coach chat meal estimate to your log.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Cut Tracker can use a photo from your library so the Coach chat can estimate a meal's calories and protein.</string>
+	<string>Lokin can use a photo from your library so the Coach chat can estimate a meal's calories and protein.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
