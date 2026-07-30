@@ -286,9 +286,12 @@
   .liftrow .lc { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: 650; text-align: right; }
 
   .pr-details { margin-top: 10px; }
-  .pr-lift { margin-top: 12px; }
-  .pr-lift:first-child { margin-top: 4px; }
+  .lft-block { margin-top: 16px; }
+  .lft-block:first-child { margin-top: 4px; }
   .pr-lift-name { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-muted); margin-bottom: 4px; }
+  .lft-chart { margin: 2px 0 6px; }
+  .lft-chart svg { width: 100%; height: auto; display: block; }
+  .lft-empty { font-size: 11.5px; color: var(--ink-faint); padding: 8px 0; }
   .pr-row { padding: 7px 2px; border-top: 1px solid var(--border); }
   .pr-row:first-of-type { border-top: 0; }
   .pr-w {
@@ -436,8 +439,8 @@
         </form>
         <div id="liftList"></div>
         <details class="settings pr-details">
-          <summary>Personal records</summary>
-          <div id="prList"></div>
+          <summary>Trend &amp; records</summary>
+          <div id="liftDetail"></div>
         </details>
       </section>
     </section>
@@ -1076,7 +1079,7 @@
 
     // strength card
     renderLifts();
-    renderPRs();
+    renderStrengthDetail();
 
     // keep the form's placeholders reflecting its date's saved values
     syncLogForm();
@@ -1104,26 +1107,86 @@
     }).join("");
   }
 
-  function renderPRs() {
-    const box = document.getElementById("prList");
+  // Per-lift block: e1RM trend chart (same visual grammar as the weight
+  // chart — raw dots, a line, a dashed reference line, here for cut-best
+  // instead of a goal) directly above that lift's per-weight PR rows, so
+  // the "shape of the trend" and the "exact weight" detail sit together.
+  function renderStrengthDetail() {
+    const box = document.getElementById("liftDetail");
     const groups = personalRecords().filter(g => g.rows.length);
     if (!groups.length) {
-      box.innerHTML = '<div class="chart-empty" style="padding:12px 0">No sets yet — personal records fill in per weight as you log them.</div>';
+      box.innerHTML = '<div class="chart-empty" style="padding:12px 0">No sets yet — trend and records fill in as you log them.</div>';
       return;
     }
-    box.innerHTML = groups.map(g =>
-      '<div class="pr-lift"><div class="pr-lift-name">' + g.name + '</div>' +
-      g.rows.map(r => {
-        const down = r.best.reps - r.latest.reps;
-        const badge = r.n === 1 ? '<span class="pr-badge pr-neutral">1 set</span>'
-          : down <= 0 ? '<span class="pr-badge pr-good">at best</span>'
-          : '<span class="pr-badge pr-warn">−' + down + ' rep' + (down === 1 ? "" : "s") + '</span>';
-        const bestLine = r.best.reps + ' reps · ' + shortDate(r.best.date);
-        const latestLine = r.latest === r.best ? "" : ' &nbsp;→&nbsp; latest ' + r.latest.reps + ' reps · ' + shortDate(r.latest.date);
-        return '<div class="pr-row"><div class="pr-w">' + r.w + ' kg' + badge + '</div>' +
-          '<div class="pr-sub">best ' + bestLine + latestLine + '</div></div>';
-      }).join("") + '</div>'
-    ).join("");
+    box.innerHTML = groups.map(g => {
+      const sets = state.strength.filter(s => s.lift === g.name).slice().sort((a, b) => a.date < b.date ? -1 : 1);
+      return '<div class="lft-block"><div class="pr-lift-name">' + g.name + '</div>' +
+        liftChartSVG(sets) + g.rows.map(prRowHTML).join("") + '</div>';
+    }).join("");
+  }
+
+  function prRowHTML(r) {
+    const down = r.best.reps - r.latest.reps;
+    const badge = r.n === 1 ? '<span class="pr-badge pr-neutral">1 set</span>'
+      : down <= 0 ? '<span class="pr-badge pr-good">at best</span>'
+      : '<span class="pr-badge pr-warn">−' + down + ' rep' + (down === 1 ? "" : "s") + '</span>';
+    const bestLine = r.best.reps + ' reps · ' + shortDate(r.best.date);
+    const latestLine = r.latest === r.best ? "" : ' &nbsp;→&nbsp; latest ' + r.latest.reps + ' reps · ' + shortDate(r.latest.date);
+    return '<div class="pr-row"><div class="pr-w">' + r.w + ' kg' + badge + '</div>' +
+      '<div class="pr-sub">best ' + bestLine + latestLine + '</div></div>';
+  }
+
+  // A compact, non-interactive e1RM-over-time line — deliberately simpler
+  // than the weight chart (no hover crosshair): each dot carries a native
+  // <title> tooltip (date, weight × reps, e1RM) instead. Points are e1RM,
+  // not raw weight, so a deliberate jump to a heavier weight doesn't read
+  // as a cliff — the per-weight rows below are what catch a same-weight
+  // regression precisely; this chart is for the overall shape of the trend.
+  function liftChartSVG(sets) {
+    if (sets.length < 2) {
+      return '<div class="lft-empty">' + (sets.length ? "Log another set to see a trend line." : "") + '</div>';
+    }
+    const pts = sets.map(s => ({ x: dnum(s.date), y: epley(s.w, s.reps), date: s.date, w: s.w, reps: s.reps }));
+    const best = Math.max.apply(null, pts.map(p => p.y));
+    const W = 660, H = 130, padL = 34, padR = 10, padT = 12, padB = 18;
+    const xs = pts.map(p => p.x);
+    let minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
+    if (minX === maxX) { minX -= 1; maxX += 1; }
+    let minY = Math.min.apply(null, pts.map(p => p.y));
+    let maxY = Math.max.apply(null, pts.map(p => p.y).concat([best]));
+    const pad = Math.max(1, (maxY - minY) * 0.15);
+    minY -= pad; maxY += pad;
+    if (maxY - minY < 2) { const mid = (maxY + minY) / 2; minY = mid - 1; maxY = mid + 1; }
+
+    const X = v => padL + (v - minX) / (maxX - minX) * (W - padL - padR);
+    const Y = v => padT + (maxY - v) / (maxY - minY) * (H - padT - padB);
+
+    const linePath = pts.map((p, i) => (i ? "L" : "M") + X(p.x).toFixed(1) + " " + Y(p.y).toFixed(1)).join(" ");
+    const dots = pts.map((p, i) => {
+      const isLast = i === pts.length - 1;
+      return '<circle cx="' + X(p.x).toFixed(1) + '" cy="' + Y(p.y).toFixed(1) + '" r="' + (isLast ? 4.5 : 2.8) +
+        '" class="' + (isLast ? "lft-end" : "lft-dot") + '"><title>' + p.date + ' — ' + p.w + ' kg × ' + p.reps +
+        ' (e1RM ' + Math.round(p.y) + ')</title></circle>';
+    }).join("");
+    const by = Y(best);
+    const xlabs = '<text x="' + X(pts[0].x).toFixed(1) + '" y="' + (H - 4) + '" class="lft-xlab" text-anchor="start">' + shortDate(pts[0].date) + '</text>' +
+      '<text x="' + X(pts[pts.length - 1].x).toFixed(1) + '" y="' + (H - 4) + '" class="lft-xlab" text-anchor="end">' + shortDate(pts[pts.length - 1].date) + '</text>';
+
+    const svg =
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="e1RM trend">' +
+      '<style>' +
+      '.lft-best{stroke:var(--good);stroke-width:1.3;stroke-dasharray:4 4;opacity:.75}' +
+      '.lft-best-lab{fill:var(--good);font:600 9.5px var(--sans);text-anchor:end}' +
+      '.lft-line{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}' +
+      '.lft-dot{fill:var(--ink-faint);opacity:.6}' +
+      '.lft-end{fill:var(--accent);stroke:var(--surface);stroke-width:2}' +
+      '.lft-xlab{fill:var(--ink-faint);font:500 10px var(--mono)}' +
+      '</style>' +
+      '<line x1="' + padL + '" y1="' + by.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + by.toFixed(1) + '" class="lft-best"/>' +
+      '<text x="' + (W - padR) + '" y="' + (by - 5).toFixed(1) + '" class="lft-best-lab">cut-best ' + Math.round(best) + '</text>' +
+      '<path d="' + linePath + '" class="lft-line"/>' + dots + xlabs +
+      '</svg>';
+    return '<div class="lft-chart">' + svg + '</div>';
   }
 
   function stat(lbl, val, unit, cap, accent) {

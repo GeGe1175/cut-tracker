@@ -156,6 +156,7 @@ setTimeout(() => {
 
     // 9. Personal records: best reps per weight, with a same-weight regression
     // (8 reps -> 6 reps at 40kg) surfaced for "am I getting weaker" at a glance.
+    // Also covers the per-lift e1RM trend chart added alongside the table.
     const prState = JSON.parse(store["cutTracker.v1"]);
     prState.strength = [
       { date: dstr(20), lift: "Weighted dip", w: 40, reps: 8 },
@@ -164,8 +165,11 @@ setTimeout(() => {
     store["cutTracker.v1"] = JSON.stringify(prState);
     eval(html.match(/<script>([\s\S]*)<\/script>/)[1]);
     expect("personal records table flags a rep regression at the same weight",
-      /40 kg[\s\S]{0,150}best 8 reps[\s\S]{0,50}latest 6 reps/i.test(strip(rendered["prList"])),
-      strip(rendered["prList"]));
+      /40 kg[\s\S]{0,150}best 8 reps[\s\S]{0,50}latest 6 reps/i.test(strip(rendered["liftDetail"])),
+      strip(rendered["liftDetail"]));
+    expect("e1RM trend chart renders with a cut-best reference line",
+      /<svg[\s\S]*cut-best 51/.test(rendered["liftDetail"] || ""),
+      rendered["liftDetail"]);
 
     console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL PASS");
     process.exit(failures ? 1 : 0);
