@@ -156,7 +156,9 @@ setTimeout(() => {
 
     // 9. Personal records: best reps per weight, with a same-weight regression
     // (8 reps -> 6 reps at 40kg) surfaced for "am I getting weaker" at a glance.
-    // Also covers the per-lift e1RM trend chart added alongside the table.
+    // (The per-weight trend chart and the delete-a-set button only render/wire
+    // on click, which this DOM shim's querySelectorAll stub can't simulate —
+    // both were verified live in-browser instead; see CLAUDE.md.)
     const prState = JSON.parse(store["cutTracker.v1"]);
     prState.strength = [
       { date: dstr(20), lift: "Weighted dip", w: 40, reps: 8 },
@@ -167,9 +169,18 @@ setTimeout(() => {
     expect("personal records table flags a rep regression at the same weight",
       /40 kg[\s\S]{0,150}best 8 reps[\s\S]{0,50}latest 6 reps/i.test(strip(rendered["liftDetail"])),
       strip(rendered["liftDetail"]));
-    expect("e1RM trend chart renders with a cut-best reference line",
-      /<svg[\s\S]*cut-best 51/.test(rendered["liftDetail"] || ""),
-      rendered["liftDetail"]);
+
+    // 10. Deleting a set (what the row's × button does under the hood —
+    // splice the entry out, save, re-render) should drop the regression
+    // badge once only the best set remains.
+    const delState = JSON.parse(store["cutTracker.v1"]);
+    delState.strength = delState.strength.filter(s => !(s.w === 40 && s.reps === 6));
+    store["cutTracker.v1"] = JSON.stringify(delState);
+    eval(html.match(/<script>([\s\S]*)<\/script>/)[1]);
+    expect("removing the regressed set clears the warning badge",
+      /40 kg[\s\S]{0,60}1 set[\s\S]{0,60}best 8 reps/i.test(strip(rendered["liftDetail"])) &&
+      !/latest 6 reps/i.test(strip(rendered["liftDetail"])),
+      strip(rendered["liftDetail"]));
 
     console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL PASS");
     process.exit(failures ? 1 : 0);

@@ -292,12 +292,16 @@
   .lft-chart { margin: 2px 0 6px; }
   .lft-chart svg { width: 100%; height: auto; display: block; }
   .lft-empty { font-size: 11.5px; color: var(--ink-faint); padding: 8px 0; }
-  .pr-row { padding: 7px 2px; border-top: 1px solid var(--border); }
-  .pr-row:first-of-type { border-top: 0; }
+  .pr-row-wrap:first-child .pr-row { border-top: 0; }
+  .pr-row {
+    display: block; width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+    padding: 7px 2px; border-top: 1px solid var(--border); font-family: inherit; color: inherit;
+  }
   .pr-w {
     display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 14px;
     font-weight: 650; font-variant-numeric: tabular-nums;
   }
+  .pr-chev { margin-left: auto; color: var(--ink-faint); font-size: 12px; font-family: var(--sans); }
   .pr-sub { font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; font-variant-numeric: tabular-nums; }
   .pr-badge {
     font-family: var(--sans); font-size: 10px; font-weight: 700; text-transform: uppercase;
@@ -305,6 +309,16 @@
   }
   .pr-badge.pr-good { background: var(--good-soft); color: var(--good); }
   .pr-badge.pr-warn { background: var(--warn-soft); color: var(--warn); }
+  .pr-detail { padding: 2px 2px 12px; }
+  .pr-set-row {
+    display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 12.5px; color: var(--ink-muted);
+  }
+  .pr-set-date { font-family: var(--mono); font-variant-numeric: tabular-nums; width: 44px; flex-shrink: 0; }
+  .pr-set-reps { font-family: var(--mono); font-variant-numeric: tabular-nums; margin-right: auto; }
+  .pr-set-del {
+    width: 22px; height: 22px; flex-shrink: 0; border-radius: 50%; border: none; padding: 0;
+    background: var(--crit-soft); color: var(--crit); font-size: 14px; line-height: 1; cursor: pointer;
+  }
   .pr-badge.pr-neutral { background: var(--surface-2); color: var(--ink-faint); }
 
   .loglist { display: flex; flex-direction: column; }
@@ -1107,56 +1121,72 @@
     }).join("");
   }
 
-  // Per-lift block: e1RM trend chart (same visual grammar as the weight
-  // chart — raw dots, a line, a dashed reference line, here for cut-best
-  // instead of a goal) directly above that lift's per-weight PR rows, so
-  // the "shape of the trend" and the "exact weight" detail sit together.
+  // Tap a weight row to expand: its own reps-over-time graph (not blended
+  // with other weights — Jeff wanted to drill into one weight at a time,
+  // not a combined trend across weight changes) plus the raw sets logged
+  // at that weight, each deletable (mis-entered sets happen). Expansion
+  // state is ephemeral UI state (which weight rows are open), same pattern
+  // as showAllLog — not persisted, just re-derived on every render().
+  let expandedPR = new Set();
   function renderStrengthDetail() {
     const box = document.getElementById("liftDetail");
     const groups = personalRecords().filter(g => g.rows.length);
     if (!groups.length) {
-      box.innerHTML = '<div class="chart-empty" style="padding:12px 0">No sets yet — trend and records fill in as you log them.</div>';
+      box.innerHTML = '<div class="chart-empty" style="padding:12px 0">No sets yet — tap a weight once you\'ve logged a few to see its trend.</div>';
       return;
     }
-    box.innerHTML = groups.map(g => {
-      const sets = state.strength.filter(s => s.lift === g.name).slice().sort((a, b) => a.date < b.date ? -1 : 1);
-      return '<div class="lft-block"><div class="pr-lift-name">' + g.name + '</div>' +
-        liftChartSVG(sets) + g.rows.map(prRowHTML).join("") + '</div>';
-    }).join("");
+    box.innerHTML = groups.map(g =>
+      '<div class="lft-block"><div class="pr-lift-name">' + g.name + '</div>' +
+      g.rows.map(r => prRowHTML(g.name, r)).join("") + '</div>'
+    ).join("");
+    wireStrengthDetail();
   }
 
-  function prRowHTML(r) {
+  function prRowHTML(liftName, r) {
     const down = r.best.reps - r.latest.reps;
     const badge = r.n === 1 ? '<span class="pr-badge pr-neutral">1 set</span>'
       : down <= 0 ? '<span class="pr-badge pr-good">at best</span>'
       : '<span class="pr-badge pr-warn">−' + down + ' rep' + (down === 1 ? "" : "s") + '</span>';
     const bestLine = r.best.reps + ' reps · ' + shortDate(r.best.date);
     const latestLine = r.latest === r.best ? "" : ' &nbsp;→&nbsp; latest ' + r.latest.reps + ' reps · ' + shortDate(r.latest.date);
-    return '<div class="pr-row"><div class="pr-w">' + r.w + ' kg' + badge + '</div>' +
-      '<div class="pr-sub">best ' + bestLine + latestLine + '</div></div>';
+    const key = liftName + "|" + r.w;
+    const open = expandedPR.has(key);
+    return '<div class="pr-row-wrap">' +
+      '<button class="pr-row" type="button" data-key="' + key.replace(/"/g, "&quot;") + '">' +
+        '<div class="pr-w">' + r.w + ' kg' + badge + '<span class="pr-chev">' + (open ? "⌃" : "⌄") + '</span></div>' +
+        '<div class="pr-sub">best ' + bestLine + latestLine + '</div>' +
+      '</button>' +
+      (open ? weightDetailHTML(liftName, r.w) : "") +
+      '</div>';
   }
 
-  // A compact, non-interactive e1RM-over-time line — deliberately simpler
-  // than the weight chart (no hover crosshair): each dot carries a native
-  // <title> tooltip (date, weight × reps, e1RM) instead. Points are e1RM,
-  // not raw weight, so a deliberate jump to a heavier weight doesn't read
-  // as a cliff — the per-weight rows below are what catch a same-weight
-  // regression precisely; this chart is for the overall shape of the trend.
-  function liftChartSVG(sets) {
-    if (sets.length < 2) {
-      return '<div class="lft-empty">' + (sets.length ? "Log another set to see a trend line." : "") + '</div>';
-    }
-    const pts = sets.map(s => ({ x: dnum(s.date), y: epley(s.w, s.reps), date: s.date, w: s.w, reps: s.reps }));
-    const best = Math.max.apply(null, pts.map(p => p.y));
-    const W = 660, H = 130, padL = 34, padR = 10, padT = 12, padB = 18;
+  function weightDetailHTML(liftName, w) {
+    const sets = state.strength
+      .map((s, i) => ({ idx: i, date: s.date, reps: s.reps, lift: s.lift, w: s.w }))
+      .filter(s => s.lift === liftName && s.w === w)
+      .sort((a, b) => a.date < b.date ? -1 : 1);
+    const rows = sets.slice().reverse().map(s =>
+      '<div class="pr-set-row"><span class="pr-set-date">' + shortDate(s.date) + '</span>' +
+      '<span class="pr-set-reps">' + s.reps + ' reps</span>' +
+      '<button class="pr-set-del" type="button" data-idx="' + s.idx + '" aria-label="Delete this set">×</button></div>'
+    ).join("");
+    return '<div class="pr-detail">' + weightChartSVG(sets) + rows + '</div>';
+  }
+
+  // Reps-over-time for ONE weight only — every point is directly comparable
+  // (same load), so unlike an e1RM chart there's no ambiguity from a weight
+  // change to read around. Each rep count is labelled right on its dot since
+  // the whole point is reading the exact number, not just the shape.
+  function weightChartSVG(sets) {
+    if (sets.length < 2) return '<div class="lft-empty">Only one set logged at this weight so far.</div>';
+    const pts = sets.map(s => ({ x: dnum(s.date), y: s.reps, date: s.date }));
+    const W = 660, H = 110, padL = 16, padR = 16, padT = 22, padB = 18;
     const xs = pts.map(p => p.x);
     let minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
     if (minX === maxX) { minX -= 1; maxX += 1; }
-    let minY = Math.min.apply(null, pts.map(p => p.y));
-    let maxY = Math.max.apply(null, pts.map(p => p.y).concat([best]));
-    const pad = Math.max(1, (maxY - minY) * 0.15);
-    minY -= pad; maxY += pad;
-    if (maxY - minY < 2) { const mid = (maxY + minY) / 2; minY = mid - 1; maxY = mid + 1; }
+    const ys = pts.map(p => p.y);
+    let minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
+    if (maxY === minY) { minY -= 1; maxY += 1; } else { const pad = (maxY - minY) * 0.35; minY -= pad; maxY += pad; }
 
     const X = v => padL + (v - minX) / (maxX - minX) * (W - padL - padR);
     const Y = v => padT + (maxY - v) / (maxY - minY) * (H - padT - padB);
@@ -1165,28 +1195,39 @@
     const dots = pts.map((p, i) => {
       const isLast = i === pts.length - 1;
       return '<circle cx="' + X(p.x).toFixed(1) + '" cy="' + Y(p.y).toFixed(1) + '" r="' + (isLast ? 4.5 : 2.8) +
-        '" class="' + (isLast ? "lft-end" : "lft-dot") + '"><title>' + p.date + ' — ' + p.w + ' kg × ' + p.reps +
-        ' (e1RM ' + Math.round(p.y) + ')</title></circle>';
+        '" class="' + (isLast ? "lft-end" : "lft-dot") + '"><title>' + p.date + ' — ' + p.y + ' reps</title></circle>';
     }).join("");
-    const by = Y(best);
+    const repLabels = pts.map(p =>
+      '<text x="' + X(p.x).toFixed(1) + '" y="' + (Y(p.y) - 9).toFixed(1) + '" class="lft-plab" text-anchor="middle">' + p.y + '</text>'
+    ).join("");
     const xlabs = '<text x="' + X(pts[0].x).toFixed(1) + '" y="' + (H - 4) + '" class="lft-xlab" text-anchor="start">' + shortDate(pts[0].date) + '</text>' +
       '<text x="' + X(pts[pts.length - 1].x).toFixed(1) + '" y="' + (H - 4) + '" class="lft-xlab" text-anchor="end">' + shortDate(pts[pts.length - 1].date) + '</text>';
 
     const svg =
-      '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="e1RM trend">' +
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Reps over time at this weight">' +
       '<style>' +
-      '.lft-best{stroke:var(--good);stroke-width:1.3;stroke-dasharray:4 4;opacity:.75}' +
-      '.lft-best-lab{fill:var(--good);font:600 9.5px var(--sans);text-anchor:end}' +
       '.lft-line{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}' +
       '.lft-dot{fill:var(--ink-faint);opacity:.6}' +
       '.lft-end{fill:var(--accent);stroke:var(--surface);stroke-width:2}' +
       '.lft-xlab{fill:var(--ink-faint);font:500 10px var(--mono)}' +
+      '.lft-plab{fill:var(--ink-muted);font:600 10px var(--mono);font-variant-numeric:tabular-nums}' +
       '</style>' +
-      '<line x1="' + padL + '" y1="' + by.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + by.toFixed(1) + '" class="lft-best"/>' +
-      '<text x="' + (W - padR) + '" y="' + (by - 5).toFixed(1) + '" class="lft-best-lab">cut-best ' + Math.round(best) + '</text>' +
-      '<path d="' + linePath + '" class="lft-line"/>' + dots + xlabs +
+      '<path d="' + linePath + '" class="lft-line"/>' + dots + repLabels + xlabs +
       '</svg>';
     return '<div class="lft-chart">' + svg + '</div>';
+  }
+
+  function wireStrengthDetail() {
+    const box = document.getElementById("liftDetail");
+    box.querySelectorAll(".pr-row").forEach(btn => btn.addEventListener("click", () => {
+      const key = btn.dataset.key;
+      if (expandedPR.has(key)) expandedPR.delete(key); else expandedPR.add(key);
+      renderStrengthDetail();
+    }));
+    box.querySelectorAll(".pr-set-del").forEach(btn => btn.addEventListener("click", () => {
+      state.strength.splice(+btn.dataset.idx, 1);
+      save(); render();
+    }));
   }
 
   function stat(lbl, val, unit, cap, accent) {
