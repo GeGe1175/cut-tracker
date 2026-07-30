@@ -219,6 +219,7 @@
     color: var(--gc, var(--ink-muted)); text-align: right; white-space: nowrap;
   }
   .grail .gval { font-family: var(--mono); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .grail.off { opacity: .55; }
 
   /* ---- Chart ---- */
   .chart-card { padding-bottom: 12px; }
@@ -283,6 +284,25 @@
   .liftrow .ln { font-weight: 600; }
   .liftrow .lm { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-muted); font-size: 12.5px; }
   .liftrow .lc { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: 650; text-align: right; }
+
+  .pr-details { margin-top: 10px; }
+  .pr-lift { margin-top: 12px; }
+  .pr-lift:first-child { margin-top: 4px; }
+  .pr-lift-name { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-muted); margin-bottom: 4px; }
+  .pr-row { padding: 7px 2px; border-top: 1px solid var(--border); }
+  .pr-row:first-of-type { border-top: 0; }
+  .pr-w {
+    display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 14px;
+    font-weight: 650; font-variant-numeric: tabular-nums;
+  }
+  .pr-sub { font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .pr-badge {
+    font-family: var(--sans); font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.03em; padding: 2px 7px; border-radius: 999px;
+  }
+  .pr-badge.pr-good { background: var(--good-soft); color: var(--good); }
+  .pr-badge.pr-warn { background: var(--warn-soft); color: var(--warn); }
+  .pr-badge.pr-neutral { background: var(--surface-2); color: var(--ink-faint); }
 
   .loglist { display: flex; flex-direction: column; }
   .logrow {
@@ -354,6 +374,17 @@
   .settings-grid .field { display: flex; flex-direction: column; gap: 4px; }
   .settings-grid label { font-size: 11px; color: var(--ink-muted); }
   .settings-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .gt-head { font-size: 11.5px; color: var(--ink-faint); line-height: 1.45; margin-top: 12px; }
+  .guard-toggles { display: flex; flex-direction: column; margin-top: 8px; }
+  .gt-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .gt-row:last-child { border-bottom: none; }
+  .gt-label { font-size: 13px; font-weight: 550; }
+  .gt-btn {
+    border: 1px solid var(--border); background: none; color: var(--ink-faint); cursor: pointer;
+    font-family: var(--sans); font-size: 11px; font-weight: 650; padding: 4px 12px; border-radius: 999px;
+    width: auto; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .gt-btn.on { background: var(--good-soft); color: var(--good); border-color: transparent; }
   .backup-status { font-size: 11.5px; color: var(--ink-faint); margin-top: 10px; }
   .backup-status.due { color: var(--warn); font-weight: 600; }
 
@@ -404,6 +435,10 @@
           <button class="btn row-add" id="saveSet" type="submit">Save set</button>
         </form>
         <div id="liftList"></div>
+        <details class="settings pr-details">
+          <summary>Personal records</summary>
+          <div id="prList"></div>
+        </details>
       </section>
     </section>
 
@@ -467,6 +502,8 @@
 
       <details class="card settings">
         <summary>Targets</summary>
+        <div class="gt-head">Guardrails — turn one off if its data isn't trustworthy right now (e.g. logging in an app that doesn't sync to Health)</div>
+        <div class="guard-toggles" id="guardToggles"></div>
         <div class="settings-grid" id="settings"></div>
         <div class="settings-actions">
           <button class="btn ghost" id="saveCfg" type="button">Save targets</button>
@@ -550,7 +587,11 @@
       fatKcalPerKg: 30,     // kcal/day fat can release per kg fat (12.7 × 30 ≈ 380)
       stepsLo: 8000, stepsHi: 12000, // activity band the maintenance estimate assumes
       chartRange: "all",             // chart display window: 1w | 1m | all (display only — regression unaffected)
-      lift1: "Weighted dip", lift2: "Weighted pull-up", lift3: "Squat"  // benchmark lifts (editable)
+      lift1: "Weighted dip", lift2: "Weighted pull-up", lift3: "Squat",  // benchmark lifts (editable)
+      // per-guardrail on/off — lets Jeff mute a card when its underlying data
+      // is known-unreliable (e.g. logging in an app that doesn't sync to
+      // Health) without losing the other six. Keyed to GUARDRAIL_IDS order.
+      guardrailsOn: { rate: true, kcal: true, floor: true, muscle: true, protein: true, strength: true, steps: true }
     },
     entries: [],
     strength: [], // [{date, lift, w, reps}] — best set per session on benchmark lifts
@@ -579,6 +620,11 @@
   const shortDate = s => { const [y, m, d] = s.split("-"); return d + "/" + m; };
   const sorted = () => state.entries.slice().sort((a, b) => a.date < b.date ? -1 : 1);
 
+  // Fixed guardrail order, shared by evalGuards' push order, the verdict-hero
+  // seven-segment strip, and the Targets on/off toggles — keep all three in sync.
+  const GUARDRAIL_IDS = ["rate", "kcal", "floor", "muscle", "protein", "strength", "steps"];
+  const GUARDRAIL_LABELS = ["Loss rate", "Eating your target", "Energy floor", "Muscle risk", "Protein", "Strength", "Activity"];
+
   // Epley estimated 1RM — comparable across rep counts, so "40×8" vs "42×6" is a fair fight
   const epley = (w, r) => r > 0 ? w * (1 + r / 30) : w;
   function liftNames() {
@@ -596,6 +642,28 @@
       const last = sets.slice().sort((a, b) => a.date < b.date ? -1 : 1)[sets.length - 1];
       return { name, n: sets.length, best, recentBest, last,
         ratio: recentBest != null && best > 0 ? recentBest / best : null };
+    });
+  }
+
+  // Per-weight personal records: for each distinct weight ever loaded on a
+  // benchmark lift, the best rep count and the most recent attempt at that
+  // weight — the raw "am I getting weaker or stronger" comparison, one row
+  // per weight, underneath the aggregate e1RM ratio the Strength guardrail uses.
+  function personalRecords() {
+    return liftNames().map(name => {
+      const sets = state.strength.filter(s => s.lift === name).slice().sort((a, b) => a.date < b.date ? -1 : 1);
+      const byWeight = {};
+      sets.forEach(s => {
+        const w = s.w;
+        if (!byWeight[w]) byWeight[w] = { w, best: s, latest: s, n: 1 };
+        else {
+          byWeight[w].n++;
+          if (s.reps > byWeight[w].best.reps) byWeight[w].best = s;
+          byWeight[w].latest = s; // sets are date-ascending, so the last write is the most recent
+        }
+      });
+      const rows = Object.values(byWeight).sort((a, b) => b.w - a.w);
+      return { name, rows };
     });
   }
 
@@ -746,25 +814,38 @@
       g.push({ key: "Activity", val, sev, state: state_, sub, icon: sevIcon(sev) });
     })();
 
+    // Disabled guardrails still compute above (cheap, keeps the seven-segment
+    // strip's fixed layout intact) but get overridden here so they don't drive
+    // the verdict — the raw value stays visible, just greyed out and excluded.
+    const on = c.guardrailsOn || {};
+    g.forEach((guard, i) => {
+      if (on[GUARDRAIL_IDS[i]] === false) {
+        guard.sev = "off"; guard.state = "Off"; guard.icon = "–";
+        guard.sub = "Disabled in Targets — not counted toward your verdict.";
+      }
+    });
+
     return g;
   }
 
-  function sevIcon(s) { return s === "good" ? "✓" : s === "warn" ? "!" : s === "crit" ? "✕" : "·"; }
+  function sevIcon(s) { return s === "good" ? "✓" : s === "warn" ? "!" : s === "crit" ? "✕" : s === "off" ? "–" : "·"; }
   function sevColor(s) {
-    return { good: "var(--good)", warn: "var(--warn)", crit: "var(--crit)", none: "var(--border-strong)" }[s];
+    return { good: "var(--good)", warn: "var(--warn)", crit: "var(--crit)", none: "var(--border-strong)", off: "var(--ink-faint)" }[s];
   }
   function sevSoft(s) {
-    return { good: "var(--good-soft)", warn: "var(--warn-soft)", crit: "var(--crit-soft)", none: "var(--surface-2)" }[s];
+    return { good: "var(--good-soft)", warn: "var(--warn-soft)", crit: "var(--crit-soft)", none: "var(--surface-2)", off: "var(--surface-2)" }[s];
   }
 
   // ---------- headline verdict ----------
   function verdict(m, guards) {
-    // priority: any crit > any warn > good; give the single most actionable message
-    const crit = guards.find(g => g.sev === "crit");
-    const warn = guards.find(g => g.sev === "warn");
+    // priority: any crit > any warn > good; give the single most actionable message.
+    // Disabled ("off") guardrails never enter this — they're informational only.
+    const active = guards.filter(g => g.sev !== "off");
+    const crit = active.find(g => g.sev === "crit");
+    const warn = active.find(g => g.sev === "warn");
     if (crit) return { sev: "crit", tag: "Act today", msg: critMsg(crit), why: crit.sub };
     if (warn) return { sev: "warn", tag: "Caution", msg: warnMsg(warn), why: warn.sub };
-    const anyData = guards.some(g => g.sev !== "none");
+    const anyData = active.some(g => g.sev !== "none");
     if (!anyData) return { sev: "accent", tag: "Getting started", msg: "Log your weight and intake to get a read.",
       why: "The whole point is catching the under-eating early — a few days of data and the guardrails light up." };
     return { sev: "good", tag: "On track", msg: "Losing at the right rate, eating enough.",
@@ -977,7 +1058,7 @@
     // guardrails
     document.getElementById("guardrails").innerHTML = guards.map(g => {
       const col = sevColor(g.sev), soft = sevSoft(g.sev);
-      return '<div class="grail" style="--gc:' + col + ';--gc-soft:' + soft + '">' +
+      return '<div class="grail' + (g.sev === "off" ? " off" : "") + '" style="--gc:' + col + ';--gc-soft:' + soft + '">' +
         '<div class="gicon">' + g.icon + '</div>' +
         '<div class="gbody"><div class="gttl">' + g.key + '</div><div class="gsub">' + g.sub + '</div></div>' +
         '<div><div class="gstate">' + g.state + '</div><div class="gval">' + g.val + '</div></div>' +
@@ -995,6 +1076,7 @@
 
     // strength card
     renderLifts();
+    renderPRs();
 
     // keep the form's placeholders reflecting its date's saved values
     syncLogForm();
@@ -1020,6 +1102,28 @@
         '<span class="lm">e1RM ' + Math.round(epley(s.last.w, s.last.reps)) + '</span>' +
         '<span class="lc" style="color:' + col + '">' + (ratio == null ? "baseline" : ratio + "% of best") + '</span></div>';
     }).join("");
+  }
+
+  function renderPRs() {
+    const box = document.getElementById("prList");
+    const groups = personalRecords().filter(g => g.rows.length);
+    if (!groups.length) {
+      box.innerHTML = '<div class="chart-empty" style="padding:12px 0">No sets yet — personal records fill in per weight as you log them.</div>';
+      return;
+    }
+    box.innerHTML = groups.map(g =>
+      '<div class="pr-lift"><div class="pr-lift-name">' + g.name + '</div>' +
+      g.rows.map(r => {
+        const down = r.best.reps - r.latest.reps;
+        const badge = r.n === 1 ? '<span class="pr-badge pr-neutral">1 set</span>'
+          : down <= 0 ? '<span class="pr-badge pr-good">at best</span>'
+          : '<span class="pr-badge pr-warn">−' + down + ' rep' + (down === 1 ? "" : "s") + '</span>';
+        const bestLine = r.best.reps + ' reps · ' + shortDate(r.best.date);
+        const latestLine = r.latest === r.best ? "" : ' &nbsp;→&nbsp; latest ' + r.latest.reps + ' reps · ' + shortDate(r.latest.date);
+        return '<div class="pr-row"><div class="pr-w">' + r.w + ' kg' + badge + '</div>' +
+          '<div class="pr-sub">best ' + bestLine + latestLine + '</div></div>';
+      }).join("") + '</div>'
+    ).join("");
   }
 
   function stat(lbl, val, unit, cap, accent) {
@@ -1159,6 +1263,25 @@
       const step = (k === "rateLo" || k === "rateHi" || k === "goal12" || k === "goal10" || k === "startWeight" || k === "fatMass") ? "0.1" : "1";
       return '<div class="field"><label>' + lbl + '</label><input data-cfg="' + k + '" type="' + type + '" step="' + step + '" value="' + v + '"></div>';
     }).join("");
+    renderGuardToggles();
+  }
+  // Toggles take effect immediately (no "Save targets" step) — a switch
+  // reads as live state, not a pending edit, and it directly drives evalGuards
+  // via state.config.guardrailsOn on the very next render().
+  function renderGuardToggles() {
+    const on = state.config.guardrailsOn || {};
+    document.getElementById("guardToggles").innerHTML = GUARDRAIL_IDS.map((id, i) => {
+      const isOn = on[id] !== false;
+      return '<div class="gt-row"><span class="gt-label">' + GUARDRAIL_LABELS[i] + '</span>' +
+        '<button class="gt-btn' + (isOn ? " on" : "") + '" data-guard="' + id + '" type="button">' +
+        (isOn ? "On" : "Off") + '</button></div>';
+    }).join("");
+    document.querySelectorAll(".gt-btn").forEach(b => b.addEventListener("click", () => {
+      const id = b.dataset.guard;
+      if (!state.config.guardrailsOn) state.config.guardrailsOn = {};
+      state.config.guardrailsOn[id] = !(state.config.guardrailsOn[id] !== false);
+      save(); renderGuardToggles(); render();
+    }));
   }
   document.getElementById("saveCfg").addEventListener("click", () => {
     document.querySelectorAll("[data-cfg]").forEach(inp => {

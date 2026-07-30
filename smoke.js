@@ -131,6 +131,42 @@ setTimeout(() => {
       /\+ Add 620 kcal, 52g protein, 55g carbs, 18g fat to today/.test(strip(rendered["chatList"])),
       strip(rendered["chatList"]));
 
+    // 8. Guardrail on/off: disabling "Muscle risk" removes it from the
+    // verdict even though its own numbers would otherwise flag a crit.
+    const gState = JSON.parse(store["cutTracker.v1"]);
+    gState.strength = []; // isolate from step 6's crit-triggering strength data
+    gState.entries = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(day0 - i * 86400000).toISOString().slice(0, 10);
+      gState.entries.push({ date: d, weight: 76, kcal: 2300, protein: 165, steps: 9000 });
+    }
+    gState.config.maintenance = 3200; // widen the intake deficit past the fat ceiling -> muscle risk crit
+    gState.config.guardrailsOn = { rate: true, kcal: true, floor: true, muscle: false, protein: true, strength: true, steps: true };
+    store["cutTracker.v1"] = JSON.stringify(gState);
+    eval(html.match(/<script>([\s\S]*)<\/script>/)[1]);
+    expect("disabled guardrail card explains it's off",
+      /Muscle risk[\s\S]{0,120}Disabled in Targets/i.test(strip(rendered["guardrails"])),
+      strip(rendered["guardrails"]));
+    // (the segment strip always shows the plain word "Muscle" as a label
+    // regardless of on/off state, so check the verdict tag/message, not
+    // whether "muscle" appears anywhere in the hero's markup)
+    expect("disabled guardrail excluded from verdict even though its data would crit",
+      /On track/i.test(strip(rendered["verdict"])) && !/muscle's at risk/i.test(strip(rendered["verdict"])),
+      strip(rendered["verdict"]));
+
+    // 9. Personal records: best reps per weight, with a same-weight regression
+    // (8 reps -> 6 reps at 40kg) surfaced for "am I getting weaker" at a glance.
+    const prState = JSON.parse(store["cutTracker.v1"]);
+    prState.strength = [
+      { date: dstr(20), lift: "Weighted dip", w: 40, reps: 8 },
+      { date: dstr(5), lift: "Weighted dip", w: 40, reps: 6 },
+    ];
+    store["cutTracker.v1"] = JSON.stringify(prState);
+    eval(html.match(/<script>([\s\S]*)<\/script>/)[1]);
+    expect("personal records table flags a rep regression at the same weight",
+      /40 kg[\s\S]{0,150}best 8 reps[\s\S]{0,50}latest 6 reps/i.test(strip(rendered["prList"])),
+      strip(rendered["prList"]));
+
     console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL PASS");
     process.exit(failures ? 1 : 0);
   }, 10);
