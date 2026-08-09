@@ -182,6 +182,28 @@ setTimeout(() => {
       !/latest 6 reps/i.test(strip(rendered["liftDetail"])),
       strip(rendered["liftDetail"]));
 
+    // 11. Coach's report payload must drop data for any muted guardrail —
+    // Jeff doesn't want the AI to see or comment on protein numbers once
+    // he's turned that guardrail off, even though kcal/steps stay in.
+    const aiState = JSON.parse(store["cutTracker.v1"]);
+    aiState.entries = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(day0 - i * 86400000).toISOString().slice(0, 10);
+      aiState.entries.push({ date: d, weight: 76, kcal: 2300, protein: 165, steps: 9000 });
+    }
+    aiState.config.guardrailsOn = { rate: true, kcal: true, floor: true, muscle: true, protein: false, strength: true, steps: true };
+    store["cutTracker.v1"] = JSON.stringify(aiState);
+    let lastAIBody = null;
+    global.fetch = async (url, opts) => { lastAIBody = JSON.parse(opts.body); return { json: async () => ({ content: [{ type: "text", text: "ok" }] }) }; };
+    eval(html.match(/<script>([\s\S]*)<\/script>/)[1]);
+    $("aiBtn")._fire("click");
+    const promptText = lastAIBody && lastAIBody.messages[0].content;
+    expect("AI prompt drops protein data for a disabled guardrail but keeps kcal/steps",
+      promptText && !/avg_protein_7d/.test(promptText) && !/"protein":/.test(promptText) &&
+      /"avg_kcal_7d"/.test(promptText) && /"avg_steps_7d"/.test(promptText) &&
+      /excluded_note/.test(promptText) && /Protein/.test(promptText),
+      promptText);
+
     console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL PASS");
     process.exit(failures ? 1 : 0);
   }, 10);

@@ -1591,8 +1591,33 @@
     "most important first, each interpreting the data (never just restating it), with specific numbers. " +
     "End with at most two concrete actions for the coming week. No flattery, no hedging boilerplate.";
 
+  // Guardrails Jeff has turned off (Targets page) are excluded from the AI
+  // payload entirely, not just from the app's own verdict — if he's muted
+  // Protein because the underlying tracking is known-unreliable (e.g. a
+  // Health-sync gap), the Coach shouldn't see or comment on that data either.
+  // kcal/floor/muscle all read the same avg_kcal_7d/daily-kcal figures, so
+  // that number is only dropped once ALL THREE are off — otherwise a still-
+  // enabled one of the three would lose the data it needs to be judged.
   function buildAnalysisPrompt() {
     const m = metrics(), guards = evalGuards(m), c = state.config;
+    const on = c.guardrailsOn || {};
+    const kcalFamilyOff = on.kcal === false && on.floor === false && on.muscle === false;
+
+    const current = { start_kg: c.startWeight, trend_kg: m.trendWeight };
+    if (on.rate !== false) current.rate_kg_wk = m.rate;
+    if (!kcalFamilyOff) current.avg_kcal_7d = m.avgKcal;
+    if (on.protein !== false) current.avg_protein_7d = m.avgProt;
+    if (on.steps !== false) current.avg_steps_7d = m.avgSteps;
+
+    const days = sorted().slice(-14).map(e => {
+      const d = { date: e.date };
+      if (e.weight != null) d.weight = e.weight;
+      if (e.kcal != null && !kcalFamilyOff) d.kcal = e.kcal;
+      if (e.protein != null && on.protein !== false) d.protein = e.protein;
+      if (e.steps != null && on.steps !== false) d.steps = e.steps;
+      return d;
+    });
+
     const data = {
       day_of_cut: dnum(todayStr()) - dnum(c.startDate) + 1,
       targets: {
@@ -1601,14 +1626,15 @@
         goal_weights_kg: [c.goal12, c.goal10], fat_mass_kg_dexa: c.fatMass,
         steps_baseline: [c.stepsLo, c.stepsHi]
       },
-      current: { start_kg: c.startWeight, trend_kg: m.trendWeight, rate_kg_wk: m.rate,
-        avg_kcal_7d: m.avgKcal, avg_protein_7d: m.avgProt, avg_steps_7d: m.avgSteps },
-      guardrails: guards.map(g => ({ name: g.key, status: g.state, severity: g.sev, value: g.val })),
-      strength: strengthStats().filter(s => s.n > 0).map(s =>
+      current,
+      guardrails: guards.filter(g => g.sev !== "off").map(g => ({ name: g.key, status: g.state, severity: g.sev, value: g.val })),
+      strength: on.strength === false ? [] : strengthStats().filter(s => s.n > 0).map(s =>
         ({ lift: s.name, sets_logged: s.n, best_e1rm: Math.round(s.best),
            recent_vs_best: s.ratio != null ? Math.round(s.ratio * 100) + "%" : "baseline only" })),
-      last_14_days: sorted().slice(-14)
+      last_14_days: days
     };
+    const off = guards.filter(g => g.sev === "off").map(g => g.key);
+    if (off.length) data.excluded_note = "These guardrails are OFF and their data has been deliberately left out — do not mention or speculate about them: " + off.join(", ");
     return "My cut-tracking data:\n" + JSON.stringify(data) + "\nAnalyze my week.";
   }
 
