@@ -182,9 +182,11 @@ setTimeout(() => {
       !/latest 6 reps/i.test(strip(rendered["liftDetail"])),
       strip(rendered["liftDetail"]));
 
-    // 11. Coach's report payload must drop data for any muted guardrail —
-    // Jeff doesn't want the AI to see or comment on protein numbers once
-    // he's turned that guardrail off, even though kcal/steps stay in.
+    // 11. Coach's report copies the prompt to the clipboard (the direct
+    // API-key path was removed 2026-08-12 — clipboard-to-Claude-app is now
+    // the only path) and must drop data for any muted guardrail — Jeff
+    // doesn't want the AI to see or comment on protein numbers once he's
+    // turned that guardrail off, even though kcal/steps stay in.
     const aiState = JSON.parse(store["cutTracker.v1"]);
     aiState.entries = [];
     for (let i = 6; i >= 0; i--) {
@@ -193,16 +195,15 @@ setTimeout(() => {
     }
     aiState.config.guardrailsOn = { rate: true, kcal: true, floor: true, muscle: true, protein: false, strength: true, steps: true };
     store["cutTracker.v1"] = JSON.stringify(aiState);
-    let lastAIBody = null;
-    global.fetch = async (url, opts) => { lastAIBody = JSON.parse(opts.body); return { json: async () => ({ content: [{ type: "text", text: "ok" }] }) }; };
+    let clipped = null;
+    global.navigator.clipboard.writeText = async text => { clipped = text; };
     eval(html.match(/<script>([\s\S]*)<\/script>/)[1]);
     $("aiBtn")._fire("click");
-    const promptText = lastAIBody && lastAIBody.messages[0].content;
     expect("AI prompt drops protein data for a disabled guardrail but keeps kcal/steps",
-      promptText && !/avg_protein_7d/.test(promptText) && !/"protein":/.test(promptText) &&
-      /"avg_kcal_7d"/.test(promptText) && /"avg_steps_7d"/.test(promptText) &&
-      /excluded_note/.test(promptText) && /Protein/.test(promptText),
-      promptText);
+      clipped && !/avg_protein_7d/.test(clipped) && !/"protein":/.test(clipped) &&
+      /"avg_kcal_7d"/.test(clipped) && /"avg_steps_7d"/.test(clipped) &&
+      /excluded_note/.test(clipped) && /Protein/.test(clipped),
+      clipped);
 
     // 12. Log page's day-by-day history and form placeholder must also hide
     // a disabled guardrail's field — not just the AI payload — while the

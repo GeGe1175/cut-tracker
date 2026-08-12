@@ -462,7 +462,9 @@
         <input type="file" id="photoFileInput" accept="image/*" capture="environment" hidden>
         <div class="loglist" id="logList"></div>
       </section>
+    </section>
 
+    <section class="page" id="page-strength">
       <section class="card">
         <div class="card-head"><h2>Strength check</h2><span class="hint">best set after training — the canary for muscle</span></div>
         <form class="lift" id="liftForm">
@@ -519,11 +521,7 @@
       <section class="card">
         <div class="card-head"><h2>Coach's report</h2><span class="hint">AI read of your last two weeks</span></div>
         <div id="aiOut" class="ai-out"></div>
-        <button class="btn ghost" id="aiBtn" type="button">Analyze my week</button>
-        <div class="field" style="margin-top:10px">
-          <label for="aiKey">Anthropic API key — optional; stays on this device, never included in backups</label>
-          <input type="password" id="aiKey" placeholder="sk-ant-… (without one, the button copies a prompt for the Claude app)">
-        </div>
+        <button class="btn ghost" id="aiBtn" type="button">Analyse</button>
       </section>
 
       <section class="card">
@@ -586,6 +584,10 @@
     <button class="tab" data-page="page-log" type="button">
       <svg viewBox="0 0 20 20" fill="none"><path d="M4 6h12M4 10h12M4 14h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       <span>Log</span>
+    </button>
+    <button class="tab" data-page="page-strength" type="button">
+      <svg viewBox="0 0 20 20" fill="none"><path d="M4 7v6M16 7v6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M7 10h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <span>Strength</span>
     </button>
     <button class="tab active" data-page="page-home" type="button">
       <svg viewBox="0 0 20 20" fill="none"><path d="M3 13l4-4 3 3 6-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="16" cy="5" r="1.6" fill="currentColor"/></svg>
@@ -1764,58 +1766,20 @@
     return "My cut-tracking data:\n" + JSON.stringify(data) + "\nAnalyze my week.";
   }
 
-  document.getElementById("aiKey").value = (function () { try { return localStorage.getItem(AI_KEY) || ""; } catch (e) { return ""; } })();
-  document.getElementById("aiKey").addEventListener("change", ev => {
-    try { localStorage.setItem(AI_KEY, ev.target.value.trim()); } catch (e) {}
-  });
-
+  // Zero-cost path only: copy the prompt to the clipboard for pasting into
+  // the Claude app. The direct-API-call path (which needed a paid Anthropic
+  // key, not covered by a Claude Code subscription) was removed 2026-08-12
+  // at Jeff's request — same reasoning as hiding the Chat feature earlier.
   document.getElementById("aiBtn").addEventListener("click", () => {
-    const btn = document.getElementById("aiBtn"), out = document.getElementById("aiOut");
-    let key = "";
-    try { key = localStorage.getItem(AI_KEY) || ""; } catch (e) {}
+    const out = document.getElementById("aiOut");
     const prompt = buildAnalysisPrompt();
-
-    if (!key) {
-      // zero-cost path: hand the prompt to the Claude app via clipboard
-      if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(AI_SYSTEM + "\n\n" + prompt)
-          .then(() => { out.textContent = "Prompt copied. Paste it into the Claude app for your analysis — or add an API key below to get it right here."; })
-          .catch(() => { out.textContent = "Couldn't copy. Add an API key below to analyze in-app."; });
-      } else {
-        out.textContent = "Add an API key below to analyze in-app.";
-      }
-      return;
+    if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(AI_SYSTEM + "\n\n" + prompt)
+        .then(() => { out.textContent = "Prompt copied — paste it into the Claude app for your analysis."; })
+        .catch(() => { out.textContent = "Couldn't copy to clipboard — try again."; });
+    } else {
+      out.textContent = "Clipboard isn't available here — try the GitHub Pages version.";
     }
-
-    btn.disabled = true; out.textContent = "Analyzing…";
-    fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true"
-      },
-      body: JSON.stringify({
-        model: "claude-opus-4-8",
-        max_tokens: 1024,
-        system: AI_SYSTEM,
-        messages: [{ role: "user", content: prompt }]
-      })
-    }).then(r => r.json()).then(res => {
-      btn.disabled = false;
-      if (res.type === "error") {
-        out.textContent = "Error: " + (res.error && res.error.message || "request failed") +
-          (res.error && res.error.type === "authentication_error" ? " — check the API key below." : "");
-        return;
-      }
-      if (res.stop_reason === "refusal") { out.textContent = "The model declined this request — try again."; return; }
-      const text = (res.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
-      out.textContent = text || "No analysis returned — try again.";
-    }).catch(() => {
-      btn.disabled = false;
-      out.textContent = "Couldn't reach the AI service — check your connection (this feature needs the GitHub Pages version, not the claude.ai artifact).";
-    });
   });
 
   // ---------- Chat: food-photo logging via Claude, tool-use for structured estimates ----------
