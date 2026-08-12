@@ -258,6 +258,7 @@
   /* ---- Log form + list ---- */
   form.log { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
   form.log .field { display: flex; flex-direction: column; gap: 4px; }
+  form.log .field[hidden] { display: none; }
   form.log label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); }
   input, select, .btn, details.settings input {
     font-family: var(--sans); font-size: 15px; color: var(--ink);
@@ -1308,23 +1309,36 @@
   }
 
   let showAllLog = false;
-  function renderLog() {
+  // Columns for a disabled guardrail are dropped entirely, not shown as a
+  // dash — a dash reads as "nothing logged that day" (true for most rows)
+  // and made a disabled field look identical to genuinely lost data. Only
+  // an actually-missing value gets a dash now; a hidden field has no
+  // column at all.
+  function visibleLogCols() {
     const vis = guardrailDataVisible();
+    return [
+      { key: "weight", label: "Weight", show: vis.weight, cell: v => v == null ? "—" : fmt(v, 2) + '<span class="u"> kg</span>' },
+      { key: "kcal", label: "kcal", show: vis.kcal, cell: v => v == null ? "—" : fmtInt(v) },
+      { key: "protein", label: "Protein", show: vis.protein, cell: v => v == null ? "—" : fmtInt(v) + '<span class="u"> g</span>' },
+      { key: "steps", label: "Steps", show: vis.steps, cell: v => v == null ? "—" : fmtInt(v) }
+    ].filter(c => c.show);
+  }
+
+  function renderLog() {
+    const cols = visibleLogCols();
+    const gridStyle = ' style="grid-template-columns:78px repeat(' + cols.length + ',1fr)"';
     const all = sorted().reverse();
     const es = showAllLog ? all : all.slice(0, 14);
     const box = document.getElementById("logList");
     if (!es.length) { box.innerHTML = '<div class="chart-empty" style="padding:16px 0">No entries yet.</div>'; return; }
-    let html = '<div class="logrow head"><span class="h">Date</span><span class="h">Weight</span><span class="h">kcal</span><span class="h">Protein</span><span class="h">Steps</span></div>';
-    html += es.map(e => {
-      const w = vis.weight ? e.weight : null, k = vis.kcal ? e.kcal : null, p = vis.protein ? e.protein : null, s = vis.steps ? e.steps : null;
-      return '<div class="logrow" data-date="' + e.date + '">' +
+    let html = '<div class="logrow head"' + gridStyle + '><span class="h">Date</span>' +
+      cols.map(c => '<span class="h">' + c.label + '</span>').join("") + '</div>';
+    html += es.map(e =>
+      '<div class="logrow" data-date="' + e.date + '"' + gridStyle + '>' +
       '<span class="d">' + shortDate(e.date) + '</span>' +
-      '<span class="m' + (w == null ? " empty" : "") + '">' + (w == null ? "—" : fmt(w, 2) + '<span class="u"> kg</span>') + '</span>' +
-      '<span class="m' + (k == null ? " empty" : "") + '">' + (k == null ? "—" : fmtInt(k)) + '</span>' +
-      '<span class="m' + (p == null ? " empty" : "") + '">' + (p == null ? "—" : fmtInt(p) + '<span class="u"> g</span>') + '</span>' +
-      '<span class="m' + (s == null ? " empty" : "") + '">' + (s == null ? "—" : fmtInt(s)) + '</span>' +
-      '</div>';
-    }).join("");
+      cols.map(c => '<span class="m' + (e[c.key] == null ? " empty" : "") + '">' + c.cell(e[c.key]) + '</span>').join("") +
+      '</div>'
+    ).join("");
     if (all.length > 14) {
       html += '<button class="logmore" type="button">' +
         (showAllLog ? "Show recent 14 days" : "Show all " + all.length + " days") + '</button>';
@@ -1387,13 +1401,17 @@
   });
 
   // the form is a running log for its date: values already show as
-  // grey placeholders, so blank = "keep what's saved", typing = overwrite
+  // grey placeholders, so blank = "keep what's saved", typing = overwrite.
+  // A field tied to a disabled guardrail is hidden entirely — not just
+  // blanked — same reasoning as the log list's dropped columns.
   function syncLogForm() {
     const vis = guardrailDataVisible();
     const e = state.entries.find(x => x.date === document.getElementById("f-date").value);
     [["f-weight", "weight", vis.weight], ["f-kcal", "kcal", vis.kcal], ["f-protein", "protein", vis.protein], ["f-steps", "steps", vis.steps]].forEach(([id, k, show]) => {
+      const input = document.getElementById(id);
+      input.closest(".field").hidden = !show;
       const v = e && show ? e[k] : null;
-      document.getElementById(id).placeholder = v == null ? "—" : v;
+      input.placeholder = v == null ? "—" : v;
     });
     renderPhotoBox();
   }
