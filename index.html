@@ -1063,17 +1063,21 @@
     const vsoft = v.sev === "good" ? "var(--good-soft)" : v.sev === "warn" ? "var(--warn-soft)" : v.sev === "crit" ? "var(--crit-soft)" : "var(--accent-soft)";
     vEl.style.setProperty("--vc", vcol); vEl.style.setProperty("--vc-soft", vsoft);
     const SEG_LABELS = ["Rate", "Kcal", "Floor", "Muscle", "Protein", "Lifts", "Steps"];
+    // A disabled guardrail drops its segment too, same as its guardrails-list
+    // card — the strip used to always show all seven (by design, to keep
+    // "verdict = worst of seven" visible), but Jeff wants a muted guardrail
+    // gone from every surface, not just dimmed. Width reflows via an inline
+    // grid-template-columns, same pattern as the log table's dropped columns.
+    const segs = guards.map((g, i) => ({ g, i })).filter(x => x.g.sev !== "off");
     vEl.innerHTML =
       '<span class="vtag"><span class="dot"></span>' + v.tag + '</span>' +
       '<div class="vmsg">' + v.msg + '</div>' +
       '<div class="vwhy">' + v.why + '</div>' +
-      '<div class="vstrip">' + guards.map((g, i) =>
+      '<div class="vstrip" style="grid-template-columns:repeat(' + segs.length + ',1fr)">' + segs.map(({ g, i }) =>
         '<div class="vseg' + (g.sev === "warn" || g.sev === "crit" ? " hot" : "") + '" data-guard="' + GUARDRAIL_IDS[i] + '" style="--sc:' + sevColor(g.sev) + '">' +
         '<i></i><span>' + SEG_LABELS[i] + '</span></div>').join("") + '</div>';
-    // tap a segment → jump to its guardrail card (by id, not index — the
-    // guardrails list below now omits disabled cards entirely, so index
-    // alignment with the always-seven-segment strip can't be assumed; a tap
-    // on a disabled guardrail's segment simply has no card to jump to)
+    // tap a segment → jump to its guardrail card (matched by id, not index —
+    // both lists can now have fewer than seven entries)
     vEl.querySelectorAll(".vseg").forEach(s => s.addEventListener("click", () => {
       const card = document.querySelector('.grail[data-guard="' + s.dataset.guard + '"]');
       if (card && card.scrollIntoView) card.scrollIntoView({ behavior: "smooth", block: "center" });
