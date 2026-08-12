@@ -144,8 +144,8 @@ setTimeout(() => {
     gState.config.guardrailsOn = { rate: true, kcal: true, floor: true, muscle: false, protein: true, strength: true, steps: true };
     store["cutTracker.v1"] = JSON.stringify(gState);
     eval(html.match(/<script>([\s\S]*)<\/script>/)[1]);
-    expect("disabled guardrail card explains it's off",
-      /Muscle risk[\s\S]{0,120}Disabled in Targets/i.test(strip(rendered["guardrails"])),
+    expect("disabled guardrail card is dropped from the guardrails list entirely",
+      !/Muscle risk/i.test(strip(rendered["guardrails"])),
       strip(rendered["guardrails"]));
     // (the segment strip always shows the plain word "Muscle" as a label
     // regardless of on/off state, so check the verdict tag/message, not

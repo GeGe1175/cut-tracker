@@ -219,7 +219,6 @@
     color: var(--gc, var(--ink-muted)); text-align: right; white-space: nowrap;
   }
   .grail .gval { font-family: var(--mono); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
-  .grail.off { opacity: .55; }
 
   /* ---- Chart ---- */
   .chart-card { padding-bottom: 12px; }
@@ -441,6 +440,23 @@
 
   <div class="pager" id="pager">
 
+    <section class="page" id="page-strength">
+      <section class="card">
+        <div class="card-head"><h2>Strength check</h2><span class="hint">best set after training — the canary for muscle</span></div>
+        <form class="lift" id="liftForm">
+          <select id="l-lift"></select>
+          <input type="number" step="0.5" inputmode="decimal" id="l-w" placeholder="kg">
+          <input type="number" step="1" inputmode="numeric" id="l-reps" placeholder="reps">
+          <button class="btn row-add" id="saveSet" type="submit">Save set</button>
+        </form>
+        <div id="liftList"></div>
+        <details class="settings pr-details">
+          <summary>Trend &amp; records</summary>
+          <div id="liftDetail"></div>
+        </details>
+      </section>
+    </section>
+
     <section class="page" id="page-log">
       <section class="card">
         <div class="card-head"><h2>Log a day</h2><span class="hint">log as you go — grey numbers are already saved</span></div>
@@ -461,23 +477,6 @@
         </div>
         <input type="file" id="photoFileInput" accept="image/*" capture="environment" hidden>
         <div class="loglist" id="logList"></div>
-      </section>
-    </section>
-
-    <section class="page" id="page-strength">
-      <section class="card">
-        <div class="card-head"><h2>Strength check</h2><span class="hint">best set after training — the canary for muscle</span></div>
-        <form class="lift" id="liftForm">
-          <select id="l-lift"></select>
-          <input type="number" step="0.5" inputmode="decimal" id="l-w" placeholder="kg">
-          <input type="number" step="1" inputmode="numeric" id="l-reps" placeholder="reps">
-          <button class="btn row-add" id="saveSet" type="submit">Save set</button>
-        </form>
-        <div id="liftList"></div>
-        <details class="settings pr-details">
-          <summary>Trend &amp; records</summary>
-          <div id="liftDetail"></div>
-        </details>
       </section>
     </section>
 
@@ -581,13 +580,13 @@
   </div>
 
   <nav class="tabbar" id="tabbar">
-    <button class="tab" data-page="page-log" type="button">
-      <svg viewBox="0 0 20 20" fill="none"><path d="M4 6h12M4 10h12M4 14h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-      <span>Log</span>
-    </button>
     <button class="tab" data-page="page-strength" type="button">
       <svg viewBox="0 0 20 20" fill="none"><path d="M4 7v6M16 7v6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M7 10h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       <span>Strength</span>
+    </button>
+    <button class="tab" data-page="page-log" type="button">
+      <svg viewBox="0 0 20 20" fill="none"><path d="M4 6h12M4 10h12M4 14h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <span>Log</span>
     </button>
     <button class="tab active" data-page="page-home" type="button">
       <svg viewBox="0 0 20 20" fill="none"><path d="M3 13l4-4 3 3 6-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="16" cy="5" r="1.6" fill="currentColor"/></svg>
@@ -1068,11 +1067,14 @@
       '<div class="vmsg">' + v.msg + '</div>' +
       '<div class="vwhy">' + v.why + '</div>' +
       '<div class="vstrip">' + guards.map((g, i) =>
-        '<div class="vseg' + (g.sev === "warn" || g.sev === "crit" ? " hot" : "") + '" style="--sc:' + sevColor(g.sev) + '">' +
+        '<div class="vseg' + (g.sev === "warn" || g.sev === "crit" ? " hot" : "") + '" data-guard="' + GUARDRAIL_IDS[i] + '" style="--sc:' + sevColor(g.sev) + '">' +
         '<i></i><span>' + SEG_LABELS[i] + '</span></div>').join("") + '</div>';
-    // tap a segment → jump to its guardrail card
-    vEl.querySelectorAll(".vseg").forEach((s, i) => s.addEventListener("click", () => {
-      const card = document.querySelectorAll(".grail")[i];
+    // tap a segment → jump to its guardrail card (by id, not index — the
+    // guardrails list below now omits disabled cards entirely, so index
+    // alignment with the always-seven-segment strip can't be assumed; a tap
+    // on a disabled guardrail's segment simply has no card to jump to)
+    vEl.querySelectorAll(".vseg").forEach(s => s.addEventListener("click", () => {
+      const card = document.querySelector('.grail[data-guard="' + s.dataset.guard + '"]');
       if (card && card.scrollIntoView) card.scrollIntoView({ behavior: "smooth", block: "center" });
     }));
 
@@ -1112,10 +1114,13 @@
       stat("Trend weight", fmt(m.trendWeight, 2), "kg", "7-day average", true) +
       stat("Lost so far", lost != null ? (lost >= 0 ? "" : "+") + fmt(Math.abs(lost), 2) : "—", "kg", lostCap, false);
 
-    // guardrails
-    document.getElementById("guardrails").innerHTML = guards.map(g => {
+    // guardrails — a disabled one is dropped from this list entirely (not
+    // just dimmed): Jeff turned it off specifically so its untrusted data
+    // stops being shown to him, not just stops driving the verdict.
+    document.getElementById("guardrails").innerHTML = guards.map((g, i) => {
+      if (g.sev === "off") return "";
       const col = sevColor(g.sev), soft = sevSoft(g.sev);
-      return '<div class="grail' + (g.sev === "off" ? " off" : "") + '" style="--gc:' + col + ';--gc-soft:' + soft + '">' +
+      return '<div class="grail" data-guard="' + GUARDRAIL_IDS[i] + '" style="--gc:' + col + ';--gc-soft:' + soft + '">' +
         '<div class="gicon">' + g.icon + '</div>' +
         '<div class="gbody"><div class="gttl">' + g.key + '</div><div class="gsub">' + g.sub + '</div></div>' +
         '<div><div class="gstate">' + g.state + '</div><div class="gval">' + g.val + '</div></div>' +
