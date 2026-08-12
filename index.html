@@ -1432,22 +1432,36 @@
   // as everything else that isn't in the JSON. Web has no filesystem
   // access, so it falls back to storing the data URL directly in state,
   // which DOES ride along in web exports.
+  // Every failure point below used to fail silently (cb(null), a bare
+  // .catch(()=>{})) — meaning "the picker didn't open", "the write failed",
+  // and "the read-back failed" were all visually identical: nothing
+  // happens. Unverified on real hardware when shipped, and when Jeff
+  // reported it "doesn't seem to be working" there was no way to tell
+  // which of the three it was. Surface the real error in the button's own
+  // text instead — same pattern that actually worked for the 2026-07-19/20
+  // HealthKit debugging saga — rather than guessing at another blind fix.
   function photoSrcFor(entry, cb) {
     if (!entry || !entry.photo) { cb(null); return; }
     if (entry.photo.indexOf("data:") === 0) { cb(entry.photo); return; } // web: already a data URL
     if (!nativeFS) { cb(null); return; }
     nativeFS.getUri({ path: entry.photo, directory: "DATA" })
       .then(res => cb(window.Capacitor.convertFileSrc(res.uri)))
-      .catch(() => cb(null));
+      .catch(err => cb(null, (err && err.message) || "couldn't resolve saved photo"));
   }
 
   function renderPhotoBox() {
     const date = document.getElementById("f-date").value;
     const entry = state.entries.find(x => x.date === date);
     const addBtn = document.getElementById("photoAddBtn"), thumb = document.getElementById("photoThumb");
-    if (!entry || !entry.photo) { addBtn.hidden = false; thumb.hidden = true; return; }
-    photoSrcFor(entry, src => {
-      if (!src) { addBtn.hidden = false; thumb.hidden = true; return; }
+    if (!entry || !entry.photo) { addBtn.hidden = false; addBtn.textContent = "+ Add progress photo for this date"; thumb.hidden = true; return; }
+    photoSrcFor(entry, (src, err) => {
+      if (!src) {
+        addBtn.hidden = false; thumb.hidden = true;
+        // photo saved (row.photo is set) but couldn't be displayed — say so
+        // explicitly rather than looking identical to "no photo attached"
+        addBtn.textContent = err ? "Saved but couldn't load it: " + err + " — tap to retry" : "+ Add progress photo for this date";
+        return;
+      }
       document.getElementById("photoImg").src = src;
       addBtn.hidden = true; thumb.hidden = false;
     });
@@ -1461,7 +1475,7 @@
       const base64 = match ? match[2] : dataUrl;
       nativeFS.writeFile({ path: "progress/" + date + ".jpg", data: base64, directory: "DATA", recursive: true })
         .then(() => { row.photo = "progress/" + date + ".jpg"; save(); renderPhotoBox(); })
-        .catch(() => { alert("Couldn't save the photo."); });
+        .catch(err => { alert("Couldn't save the photo: " + ((err && err.message) || "unknown error")); });
     } else {
       row.photo = dataUrl; save(); renderPhotoBox();
     }
@@ -1469,10 +1483,16 @@
 
   document.getElementById("photoAddBtn").addEventListener("click", () => {
     const date = document.getElementById("f-date").value; if (!date) return;
+    const btn = document.getElementById("photoAddBtn");
+    const resetLabel = "+ Add progress photo for this date";
     if (progressCamera) {
       progressCamera.getPhoto({ resultType: "dataUrl", source: "PROMPT", quality: 70, width: 1024, correctOrientation: true })
         .then(photo => savePhotoForDate(date, photo.dataUrl))
-        .catch(() => {}); // user cancelled the picker — no-op
+        .catch(err => {
+          const msg = (err && err.message) || "";
+          if (/cancel/i.test(msg)) return; // user backed out of the picker — not an error
+          btn.textContent = "Camera error: " + (msg || "unknown"); setTimeout(() => { btn.textContent = resetLabel; }, 4000);
+        });
       return;
     }
     document.getElementById("photoFileInput").click();
