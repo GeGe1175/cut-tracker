@@ -204,6 +204,21 @@ setTimeout(() => {
       /excluded_note/.test(promptText) && /Protein/.test(promptText),
       promptText);
 
+    // 12. Log page's day-by-day history and form placeholder must also hide
+    // a disabled guardrail's field — not just the AI payload — while the
+    // raw value stays intact in storage (editable, just not displayed).
+    expect("log list shows an em dash for protein once that guardrail is off, kcal/steps stay",
+      /2,300[\s\S]{0,20}—[\s\S]{0,20}9,000/.test(strip(rendered["logList"])) && !/165/.test(strip(rendered["logList"])),
+      strip(rendered["logList"]));
+    $("f-date").value = aiState.entries[aiState.entries.length - 1].date;
+    $("f-date")._fire("change");
+    expect("log form placeholder hides the same disabled field",
+      $("f-protein").placeholder === "—" && $("f-kcal").placeholder !== "—",
+      JSON.stringify({ protein: $("f-protein").placeholder, kcal: $("f-kcal").placeholder }));
+    expect("the underlying protein value is untouched in storage",
+      JSON.parse(store["cutTracker.v1"]).entries.find(e => e.date === aiState.entries[0].date).protein === 165,
+      JSON.stringify(JSON.parse(store["cutTracker.v1"]).entries[0]));
+
     console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL PASS");
     process.exit(failures ? 1 : 0);
   }, 10);

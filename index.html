@@ -321,6 +321,18 @@
   }
   .pr-badge.pr-neutral { background: var(--surface-2); color: var(--ink-faint); }
 
+  .photo-box { margin-bottom: 14px; }
+  .photo-add {
+    border: 1px dashed var(--border-strong); background: none; color: var(--ink-muted); cursor: pointer;
+    font-family: var(--sans); font-size: 13px; font-weight: 600; padding: 12px; border-radius: var(--r-sm); width: 100%;
+  }
+  .photo-thumb { position: relative; display: inline-block; }
+  .photo-thumb img { max-height: 120px; max-width: 100%; border-radius: var(--r-sm); display: block; }
+  .photo-x {
+    position: absolute; top: -7px; right: -7px; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--crit); color: #fff; border: none; font-size: 14px; line-height: 1; cursor: pointer; padding: 0;
+  }
+
   .loglist { display: flex; flex-direction: column; }
   .logrow {
     display: grid; grid-template-columns: 78px 1fr 1fr 1fr 1fr; align-items: center; gap: 8px;
@@ -440,6 +452,14 @@
           <div class="field"><label for="f-steps">Steps</label><input type="number" step="1" inputmode="numeric" id="f-steps" placeholder="—"></div>
           <button class="btn row-add" id="saveDay" type="submit">Save day</button>
         </form>
+        <div class="photo-box" id="photoBox">
+          <button class="photo-add" id="photoAddBtn" type="button" hidden>+ Add progress photo for this date</button>
+          <div class="photo-thumb" id="photoThumb" hidden>
+            <img id="photoImg" alt="Progress photo">
+            <button class="photo-x" id="photoRemoveBtn" type="button" aria-label="Remove progress photo">×</button>
+          </div>
+        </div>
+        <input type="file" id="photoFileInput" accept="image/*" capture="environment" hidden>
         <div class="loglist" id="logList"></div>
       </section>
 
@@ -641,6 +661,24 @@
   // seven-segment strip, and the Targets on/off toggles — keep all three in sync.
   const GUARDRAIL_IDS = ["rate", "kcal", "floor", "muscle", "protein", "strength", "steps"];
   const GUARDRAIL_LABELS = ["Loss rate", "Eating your target", "Energy floor", "Muscle risk", "Protein", "Strength", "Activity"];
+
+  // Which raw fields are safe to display/send anywhere outside the Targets
+  // page itself, given the current guardrail on/off state — shared by the
+  // Coach's-report payload and the Log page (form placeholders + history
+  // list), so muting a guardrail hides its data everywhere consistently.
+  // kcal/floor/muscle all read the same kcal figure, so it's only hidden
+  // once all three are off; weight always stays — it's the app's core
+  // measurement, not itself "unreliable" the way a Health-sync gap makes
+  // kcal/protein/steps unreliable.
+  function guardrailDataVisible() {
+    const on = state.config.guardrailsOn || {};
+    return {
+      weight: true,
+      kcal: !(on.kcal === false && on.floor === false && on.muscle === false),
+      protein: on.protein !== false,
+      steps: on.steps !== false
+    };
+  }
 
   // Epley estimated 1RM — comparable across rep counts, so "40×8" vs "42×6" is a fair fight
   const epley = (w, r) => r > 0 ? w * (1 + r / 30) : w;
@@ -1264,20 +1302,22 @@
 
   let showAllLog = false;
   function renderLog() {
+    const vis = guardrailDataVisible();
     const all = sorted().reverse();
     const es = showAllLog ? all : all.slice(0, 14);
     const box = document.getElementById("logList");
     if (!es.length) { box.innerHTML = '<div class="chart-empty" style="padding:16px 0">No entries yet.</div>'; return; }
     let html = '<div class="logrow head"><span class="h">Date</span><span class="h">Weight</span><span class="h">kcal</span><span class="h">Protein</span><span class="h">Steps</span></div>';
-    html += es.map(e =>
-      '<div class="logrow" data-date="' + e.date + '">' +
+    html += es.map(e => {
+      const w = vis.weight ? e.weight : null, k = vis.kcal ? e.kcal : null, p = vis.protein ? e.protein : null, s = vis.steps ? e.steps : null;
+      return '<div class="logrow" data-date="' + e.date + '">' +
       '<span class="d">' + shortDate(e.date) + '</span>' +
-      '<span class="m' + (e.weight == null ? " empty" : "") + '">' + (e.weight == null ? "—" : fmt(e.weight, 2) + '<span class="u"> kg</span>') + '</span>' +
-      '<span class="m' + (e.kcal == null ? " empty" : "") + '">' + (e.kcal == null ? "—" : fmtInt(e.kcal)) + '</span>' +
-      '<span class="m' + (e.protein == null ? " empty" : "") + '">' + (e.protein == null ? "—" : fmtInt(e.protein) + '<span class="u"> g</span>') + '</span>' +
-      '<span class="m' + (e.steps == null ? " empty" : "") + '">' + (e.steps == null ? "—" : fmtInt(e.steps)) + '</span>' +
-      '</div>'
-    ).join("");
+      '<span class="m' + (w == null ? " empty" : "") + '">' + (w == null ? "—" : fmt(w, 2) + '<span class="u"> kg</span>') + '</span>' +
+      '<span class="m' + (k == null ? " empty" : "") + '">' + (k == null ? "—" : fmtInt(k)) + '</span>' +
+      '<span class="m' + (p == null ? " empty" : "") + '">' + (p == null ? "—" : fmtInt(p) + '<span class="u"> g</span>') + '</span>' +
+      '<span class="m' + (s == null ? " empty" : "") + '">' + (s == null ? "—" : fmtInt(s)) + '</span>' +
+      '</div>';
+    }).join("");
     if (all.length > 14) {
       html += '<button class="logmore" type="button">' +
         (showAllLog ? "Show recent 14 days" : "Show all " + all.length + " days") + '</button>';
@@ -1342,13 +1382,90 @@
   // the form is a running log for its date: values already show as
   // grey placeholders, so blank = "keep what's saved", typing = overwrite
   function syncLogForm() {
+    const vis = guardrailDataVisible();
     const e = state.entries.find(x => x.date === document.getElementById("f-date").value);
-    [["f-weight", "weight"], ["f-kcal", "kcal"], ["f-protein", "protein"], ["f-steps", "steps"]].forEach(([id, k]) => {
-      const v = e ? e[k] : null;
+    [["f-weight", "weight", vis.weight], ["f-kcal", "kcal", vis.kcal], ["f-protein", "protein", vis.protein], ["f-steps", "steps", vis.steps]].forEach(([id, k, show]) => {
+      const v = e && show ? e[k] : null;
       document.getElementById(id).placeholder = v == null ? "—" : v;
     });
+    renderPhotoBox();
   }
   document.getElementById("f-date").addEventListener("change", syncLogForm);
+
+  // ---------- Progress photos: one per logged date ----------
+  // Native: stored as an actual file (Directory.Data — persists across
+  // rebuilds, wiped only by a full app delete, same lifecycle as everything
+  // else on-device) via Filesystem, with only the relative path kept in
+  // state.entries[].photo — keeps localStorage/backups lean instead of
+  // carrying giant base64 blobs. Tradeoff: native progress photos are NOT
+  // currently included in Export backup (only the path would export, and
+  // the file itself lives outside `state`) — same "on-device only" caveat
+  // as everything else that isn't in the JSON. Web has no filesystem
+  // access, so it falls back to storing the data URL directly in state,
+  // which DOES ride along in web exports.
+  function photoSrcFor(entry, cb) {
+    if (!entry || !entry.photo) { cb(null); return; }
+    if (entry.photo.indexOf("data:") === 0) { cb(entry.photo); return; } // web: already a data URL
+    if (!nativeFS) { cb(null); return; }
+    nativeFS.getUri({ path: entry.photo, directory: "DATA" })
+      .then(res => cb(window.Capacitor.convertFileSrc(res.uri)))
+      .catch(() => cb(null));
+  }
+
+  function renderPhotoBox() {
+    const date = document.getElementById("f-date").value;
+    const entry = state.entries.find(x => x.date === date);
+    const addBtn = document.getElementById("photoAddBtn"), thumb = document.getElementById("photoThumb");
+    if (!entry || !entry.photo) { addBtn.hidden = false; thumb.hidden = true; return; }
+    photoSrcFor(entry, src => {
+      if (!src) { addBtn.hidden = false; thumb.hidden = true; return; }
+      document.getElementById("photoImg").src = src;
+      addBtn.hidden = true; thumb.hidden = false;
+    });
+  }
+
+  function savePhotoForDate(date, dataUrl) {
+    let row = state.entries.find(x => x.date === date);
+    if (!row) { row = { date, weight: null, kcal: null, protein: null, carbs: null, fat: null, steps: null }; state.entries.push(row); }
+    if (nativeFS) {
+      const match = dataUrl.match(/^data:(.*?);base64,(.*)$/);
+      const base64 = match ? match[2] : dataUrl;
+      nativeFS.writeFile({ path: "progress/" + date + ".jpg", data: base64, directory: "DATA", recursive: true })
+        .then(() => { row.photo = "progress/" + date + ".jpg"; save(); renderPhotoBox(); })
+        .catch(() => { alert("Couldn't save the photo."); });
+    } else {
+      row.photo = dataUrl; save(); renderPhotoBox();
+    }
+  }
+
+  document.getElementById("photoAddBtn").addEventListener("click", () => {
+    const date = document.getElementById("f-date").value; if (!date) return;
+    if (progressCamera) {
+      progressCamera.getPhoto({ resultType: "dataUrl", source: "PROMPT", quality: 70, width: 1024, correctOrientation: true })
+        .then(photo => savePhotoForDate(date, photo.dataUrl))
+        .catch(() => {}); // user cancelled the picker — no-op
+      return;
+    }
+    document.getElementById("photoFileInput").click();
+  });
+  document.getElementById("photoFileInput").addEventListener("change", e => {
+    const f = e.target.files[0]; if (!f) return;
+    const date = document.getElementById("f-date").value;
+    const r = new FileReader();
+    r.onload = () => savePhotoForDate(date, r.result);
+    r.readAsDataURL(f);
+    e.target.value = "";
+  });
+  document.getElementById("photoRemoveBtn").addEventListener("click", () => {
+    const date = document.getElementById("f-date").value;
+    const row = state.entries.find(x => x.date === date);
+    if (!row || !row.photo) return;
+    const oldPath = row.photo;
+    row.photo = null; save(); renderPhotoBox();
+    if (nativeFS && oldPath.indexOf("data:") !== 0) {
+      nativeFS.deleteFile({ path: oldPath, directory: "DATA" }).catch(() => {});
+    }
+  });
 
   const CFG_FIELDS = [
     ["calTarget", "Calorie target"], ["rmr", "RMR floor"], ["proteinTarget", "Protein target g"],
@@ -1414,6 +1531,16 @@
   const nativeShare = (function () {
     try {
       if (nativeFS) return window.Capacitor.registerPlugin("Share");
+    } catch (e) {}
+    return null;
+  })();
+  // Separate from the (currently disabled) Chat feature's own camera
+  // reference — that one lives inside Chat's dormant guard block and isn't
+  // reachable here. Progress photos need their own, always-on regardless
+  // of whether Chat is enabled.
+  const progressCamera = (function () {
+    try {
+      if (nativeFS) return window.Capacitor.registerPlugin("Camera");
     } catch (e) {}
     return null;
   })();
@@ -1600,21 +1727,20 @@
   // enabled one of the three would lose the data it needs to be judged.
   function buildAnalysisPrompt() {
     const m = metrics(), guards = evalGuards(m), c = state.config;
-    const on = c.guardrailsOn || {};
-    const kcalFamilyOff = on.kcal === false && on.floor === false && on.muscle === false;
+    const on = c.guardrailsOn || {}, vis = guardrailDataVisible();
 
     const current = { start_kg: c.startWeight, trend_kg: m.trendWeight };
     if (on.rate !== false) current.rate_kg_wk = m.rate;
-    if (!kcalFamilyOff) current.avg_kcal_7d = m.avgKcal;
-    if (on.protein !== false) current.avg_protein_7d = m.avgProt;
-    if (on.steps !== false) current.avg_steps_7d = m.avgSteps;
+    if (vis.kcal) current.avg_kcal_7d = m.avgKcal;
+    if (vis.protein) current.avg_protein_7d = m.avgProt;
+    if (vis.steps) current.avg_steps_7d = m.avgSteps;
 
     const days = sorted().slice(-14).map(e => {
       const d = { date: e.date };
       if (e.weight != null) d.weight = e.weight;
-      if (e.kcal != null && !kcalFamilyOff) d.kcal = e.kcal;
-      if (e.protein != null && on.protein !== false) d.protein = e.protein;
-      if (e.steps != null && on.steps !== false) d.steps = e.steps;
+      if (e.kcal != null && vis.kcal) d.kcal = e.kcal;
+      if (e.protein != null && vis.protein) d.protein = e.protein;
+      if (e.steps != null && vis.steps) d.steps = e.steps;
       return d;
     });
 
