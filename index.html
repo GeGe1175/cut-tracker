@@ -801,7 +801,16 @@
       const crit = w != null ? critPct / 100 * w : null;
       const bandTxt = w != null ? fmt(lo, 2) + "–" + fmt(hi, 2) + " kg/wk (" + fmt(loPct, 1) + "–" + fmt(hiPct, 1) + "% of " + fmt(w, 1) + " kg)" : "—";
       let sev, state_, sub, val = m.rate != null ? fmt(m.rate, 2) + " kg/wk" : "—";
-      if (m.rate == null || lo == null) { sev = "none"; state_ = "No data"; sub = "Log at least 2 weigh-ins spanning a week to read your rate."; }
+      if (m.rate == null || lo == null) {
+        sev = "none"; state_ = "No data";
+        // Still show the target band before there's enough data to compute
+        // an actual rate — off startWeight since trend weight doesn't exist
+        // yet. Previously said nothing about the band at all here, which
+        // read as "the band is missing" rather than "not computed yet."
+        const w0 = c.startWeight;
+        const preview = w0 ? " Target once you have data: " + fmt(loPct / 100 * w0, 2) + "–" + fmt(hiPct / 100 * w0, 2) + " kg/wk (" + fmt(loPct, 1) + "–" + fmt(hiPct, 1) + "% of " + fmt(w0, 1) + " kg)." : "";
+        sub = "Log at least 2 weigh-ins spanning a week to read your rate." + preview;
+      }
       else if (m.rate > crit) { sev = "crit"; state_ = "Too fast"; sub = "Above " + fmt(crit, 2) + " kg/wk (" + fmt(critPct, 1) + "% of bodyweight) pulls hard on muscle — nudge calories up toward maintenance."; }
       else if (m.rate > hi) { sev = "warn"; state_ = "Slightly fast"; sub = "Just over your " + bandTxt + " band. Add ~150–200 kcal."; }
       else if (m.rate >= lo) { sev = "good"; state_ = "On target"; sub = "Right inside your " + bandTxt + " band. Hold it."; }
