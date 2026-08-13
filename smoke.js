@@ -247,6 +247,36 @@ setTimeout(() => {
       /Loss rate[\s\S]{0,200}(Slightly fast|Too fast)/i.test(strip(rendered["guardrails"])),
       strip(rendered["guardrails"]));
 
+    // 14. Jeff hit this exact bug: the band text only appeared in some of
+    // the seven Loss Rate branches (crit/warn/on-target) -- "Gentle" (below
+    // band but still losing), "Stalled", and "Gaining" showed no band at
+    // all, so from his side it looked like the band had disappeared. Check
+    // the two branches that were silent before: a very slow, steady loss
+    // (Gentle) and a flat trend (Stalled) must both show "Target" text now.
+    const gentleState = JSON.parse(store["cutTracker.v1"]);
+    gentleState.entries = [];
+    for (let i = 20; i >= 0; i--) {
+      const d = new Date(day0 - i * 86400000).toISOString().slice(0, 10);
+      gentleState.entries.push({ date: d, weight: +(79.4 - (20 - i) * (0.2 / 7)).toFixed(2) }); // ~0.2 kg/wk -> Gentle
+    }
+    store["cutTracker.v1"] = JSON.stringify(gentleState);
+    eval(html.match(/<script>([\s\S]*)<\/script>/)[1]);
+    expect("'Gentle' (below band but still losing) shows the target band, not just the crit/warn/on-target states",
+      /Loss rate[\s\S]{0,300}Target[\s\S]{0,60}Gentle/i.test(strip(rendered["guardrails"])),
+      strip(rendered["guardrails"]));
+
+    const stalledState = JSON.parse(store["cutTracker.v1"]);
+    stalledState.entries = [];
+    for (let i = 10; i >= 0; i--) {
+      const d = new Date(day0 - i * 86400000).toISOString().slice(0, 10);
+      stalledState.entries.push({ date: d, weight: 78.0 }); // flat -> Stalled
+    }
+    store["cutTracker.v1"] = JSON.stringify(stalledState);
+    eval(html.match(/<script>([\s\S]*)<\/script>/)[1]);
+    expect("'Stalled' also shows the target band",
+      /Loss rate[\s\S]{0,300}Target[\s\S]{0,60}Stalled/i.test(strip(rendered["guardrails"])),
+      strip(rendered["guardrails"]));
+
     console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL PASS");
     process.exit(failures ? 1 : 0);
   }, 10);

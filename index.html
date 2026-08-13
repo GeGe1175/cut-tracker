@@ -799,25 +799,23 @@
       const lo = w != null ? loPct / 100 * w : null;
       const hi = w != null ? hiPct / 100 * w : null;
       const crit = w != null ? critPct / 100 * w : null;
-      const bandTxt = w != null ? fmt(lo, 2) + "–" + fmt(hi, 2) + " kg/wk (" + fmt(loPct, 1) + "–" + fmt(hiPct, 1) + "% of " + fmt(w, 1) + " kg)" : "—";
-      let sev, state_, sub, val = m.rate != null ? fmt(m.rate, 2) + " kg/wk" : "—";
-      if (m.rate == null || lo == null) {
-        sev = "none"; state_ = "No data";
-        // Still show the target band before there's enough data to compute
-        // an actual rate — off startWeight since trend weight doesn't exist
-        // yet. Previously said nothing about the band at all here, which
-        // read as "the band is missing" rather than "not computed yet."
-        const w0 = c.startWeight;
-        const preview = w0 ? " Target once you have data: " + fmt(loPct / 100 * w0, 2) + "–" + fmt(hiPct / 100 * w0, 2) + " kg/wk (" + fmt(loPct, 1) + "–" + fmt(hiPct, 1) + "% of " + fmt(w0, 1) + " kg)." : "";
-        sub = "Log at least 2 weigh-ins spanning a week to read your rate." + preview;
-      }
-      else if (m.rate > crit) { sev = "crit"; state_ = "Too fast"; sub = "Above " + fmt(crit, 2) + " kg/wk (" + fmt(critPct, 1) + "% of bodyweight) pulls hard on muscle — nudge calories up toward maintenance."; }
-      else if (m.rate > hi) { sev = "warn"; state_ = "Slightly fast"; sub = "Just over your " + bandTxt + " band. Add ~150–200 kcal."; }
-      else if (m.rate >= lo) { sev = "good"; state_ = "On target"; sub = "Right inside your " + bandTxt + " band. Hold it."; }
-      else if (m.rate >= 0.15) { sev = "good"; state_ = "Gentle"; sub = "Below band but still losing — fine, especially a low-step week. Tighten only if you want it faster."; }
-      else if (m.rate >= -0.1) { sev = "warn"; state_ = "Stalled"; sub = "Trend is flat. If this holds a full week, trim ~150 kcal or add steps."; }
-      else { sev = "warn"; state_ = "Gaining"; sub = "Trend is up. Expected right after an eat-more phase (glycogen); otherwise re-check intake."; }
-      g.push({ key: "Loss rate", val, sev, state: state_, sub, icon: sevIcon(sev) });
+      // Shown at the end of EVERY branch below, not just some — it used to
+      // only appear in the crit/warn/on-target messages, so "Gentle"
+      // (below band but still losing), "Stalled", and "Gaining" showed no
+      // band at all and Jeff couldn't reliably find it. Falls back to
+      // startWeight when there's no trend weight yet, so it's always
+      // present even before there's enough data for a real rate.
+      const bandW = w != null ? w : c.startWeight;
+      const bandTxt = bandW ? " Target " + fmt(loPct, 1) + "–" + fmt(hiPct, 1) + "%/wk (" + fmt(loPct / 100 * bandW, 2) + "–" + fmt(hiPct / 100 * bandW, 2) + " kg/wk off " + fmt(bandW, 1) + " kg)." : "";
+      let sev, state_, msg, val = m.rate != null ? fmt(m.rate, 2) + " kg/wk" : "—";
+      if (m.rate == null || lo == null) { sev = "none"; state_ = "No data"; msg = "Log at least 2 weigh-ins spanning a week to read your rate."; }
+      else if (m.rate > crit) { sev = "crit"; state_ = "Too fast"; msg = "Pulls hard on muscle — nudge calories up toward maintenance."; }
+      else if (m.rate > hi) { sev = "warn"; state_ = "Slightly fast"; msg = "Add ~150–200 kcal to bring it back down."; }
+      else if (m.rate >= lo) { sev = "good"; state_ = "On target"; msg = "Hold it."; }
+      else if (m.rate >= 0.15) { sev = "good"; state_ = "Gentle"; msg = "Below band but still losing — fine, especially a low-step week. Tighten only if you want it faster."; }
+      else if (m.rate >= -0.1) { sev = "warn"; state_ = "Stalled"; msg = "Trend is flat. If this holds a full week, trim ~150 kcal or add steps."; }
+      else { sev = "warn"; state_ = "Gaining"; msg = "Trend is up. Expected right after an eat-more phase (glycogen); otherwise re-check intake."; }
+      g.push({ key: "Loss rate", val, sev, state: state_, sub: msg + bandTxt, icon: sevIcon(sev) });
     })();
 
     // 2. Eating your target (the flagship — the mistake that cost strength)
