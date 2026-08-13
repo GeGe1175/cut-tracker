@@ -99,6 +99,9 @@ setTimeout(() => {
   store["cutTracker.v1"] = JSON.stringify(st);
   eval(html.match(/<script>([\s\S]*)<\/script>/)[1]);
   expect("strength drop flags crit", /strength/i.test(strip(rendered["verdict"])), strip(rendered["verdict"]));
+  expect("lift summary row gets an e1RM sparkline once a lift has 2+ sets, and is tap-jumpable",
+    /class="lft-mini-spark"/.test(rendered["liftList"]) && /data-lift="Weighted dip"/.test(rendered["liftList"]),
+    rendered["liftList"]);
 
   // 7. Chat: a food photo/description round-trips through Claude tool-use
   // and produces a taggable kcal/protein/carbs/fat estimate in state.chat.

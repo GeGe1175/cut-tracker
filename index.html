@@ -277,13 +277,16 @@
   .btn.row-add { grid-column: 1 / -1; }
   form.lift { display: grid; grid-template-columns: 1.7fr 1fr 1fr; gap: 8px; margin-bottom: 12px; }
   .liftrow {
-    display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; align-items: center; gap: 8px;
-    padding: 9px 2px; border-top: 1px solid var(--border); font-size: 13px;
+    padding: 10px 2px; border-top: 1px solid var(--border); font-size: 13px; cursor: pointer;
   }
   .liftrow:first-child { border-top: 0; }
+  .liftrow:active { background: var(--surface-2); }
+  .liftrow-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .liftrow-sub { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 3px; }
   .liftrow .ln { font-weight: 600; }
   .liftrow .lm { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-muted); font-size: 12.5px; }
-  .liftrow .lc { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: 650; text-align: right; }
+  .liftrow .lc { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12.5px; font-weight: 650; text-align: right; flex-shrink: 0; }
+  .lft-mini-spark { width: 56px; height: 20px; flex-shrink: 0; display: block; }
 
   .pr-details { margin-top: 10px; }
   .lft-block { margin-top: 16px; }
@@ -451,7 +454,7 @@
           <button class="btn row-add" id="saveSet" type="submit">Save set</button>
         </form>
         <div id="liftList"></div>
-        <details class="settings pr-details">
+        <details class="settings pr-details" id="liftTrendDetails">
           <summary>Trend &amp; records</summary>
           <div id="liftDetail"></div>
         </details>
@@ -1178,14 +1181,50 @@
       box.innerHTML = '<div class="chart-empty" style="padding:12px 0">No sets yet. After training, log the best set of a benchmark lift — weight × reps.</div>';
       return;
     }
+    // Two lines per lift so the always-visible summary answers "getting
+    // weaker or stronger" without opening Trend & records at all: a status
+    // badge up top, and a tiny e1RM sparkline (same color as the badge)
+    // alongside the raw numbers underneath. Tapping the row opens Trend &
+    // records and jumps straight to that lift, instead of leaving Jeff to
+    // hunt for it — the two-tap-deep nesting was the "confusing to get
+    // around" complaint.
     box.innerHTML = stats.map(s => {
       const ratio = s.ratio != null && s.n >= 2 ? Math.round(s.ratio * 100) : null;
       const col = ratio == null ? "var(--ink-faint)" : ratio >= 97 ? "var(--good)" : ratio >= 92 ? "var(--warn)" : "var(--crit)";
-      return '<div class="liftrow"><span class="ln">' + s.name + '</span>' +
-        '<span class="lm">' + s.last.w + ' kg × ' + s.last.reps + '</span>' +
-        '<span class="lm">e1RM ' + Math.round(epley(s.last.w, s.last.reps)) + '</span>' +
-        '<span class="lc" style="color:' + col + '">' + (ratio == null ? "baseline" : ratio + "% of best") + '</span></div>';
+      const sets = state.strength.filter(x => x.lift === s.name).slice().sort((a, b) => a.date < b.date ? -1 : 1);
+      return '<div class="liftrow" data-lift="' + s.name.replace(/"/g, "&quot;") + '">' +
+        '<div class="liftrow-top"><span class="ln">' + s.name + '</span>' +
+        '<span class="lc" style="color:' + col + '">' + (ratio == null ? "baseline" : ratio + "% of best") + '</span></div>' +
+        '<div class="liftrow-sub"><span class="lm">' + s.last.w + ' kg × ' + s.last.reps + ' · e1RM ' + Math.round(epley(s.last.w, s.last.reps)) + '</span>' +
+        liftSparkSVG(sets, col) + '</div></div>';
     }).join("");
+    box.querySelectorAll(".liftrow[data-lift]").forEach(row => row.addEventListener("click", () => {
+      const details = document.getElementById("liftTrendDetails");
+      details.open = true;
+      const block = document.querySelector('.lft-block[data-lift="' + row.dataset.lift.replace(/"/g, '\\"') + '"]');
+      if (block && block.scrollIntoView) block.scrollIntoView({ behavior: "smooth", block: "center" });
+    }));
+  }
+
+  // A tiny, label-free e1RM-over-time line for the always-visible lift
+  // summary — deliberately not the same "full chart" Jeff didn't want as
+  // the primary view (see Trend & records: per-weight, not blended e1RM).
+  // This is a glance-only shape + endpoint dot, colored by current status,
+  // not meant to be read precisely — that's what tapping through is for.
+  function liftSparkSVG(sets, col) {
+    if (sets.length < 2) return "";
+    const pts = sets.map(x => epley(x.w, x.reps));
+    const W = 64, H = 22, pad = 3;
+    const minY = Math.min.apply(null, pts), maxY = Math.max.apply(null, pts);
+    const range = maxY - minY || 1;
+    const X = i => pad + i / (pts.length - 1) * (W - pad * 2);
+    const Y = v => H - pad - (v - minY) / range * (H - pad * 2);
+    const path = pts.map((v, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1)).join(" ");
+    const endX = X(pts.length - 1), endY = Y(pts[pts.length - 1]);
+    return '<svg class="lft-mini-spark" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
+      '<path d="' + path + '" fill="none" stroke="' + col + '" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>' +
+      '<circle cx="' + endX.toFixed(1) + '" cy="' + endY.toFixed(1) + '" r="2.2" fill="' + col + '"/>' +
+      '</svg>';
   }
 
   // Tap a weight row to expand: its own reps-over-time graph (not blended
@@ -1203,7 +1242,7 @@
       return;
     }
     box.innerHTML = groups.map(g =>
-      '<div class="lft-block"><div class="pr-lift-name">' + g.name + '</div>' +
+      '<div class="lft-block" data-lift="' + g.name.replace(/"/g, "&quot;") + '"><div class="pr-lift-name">' + g.name + '</div>' +
       g.rows.map(r => prRowHTML(g.name, r)).join("") + '</div>'
     ).join("");
     wireStrengthDetail();
