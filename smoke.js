@@ -225,6 +225,25 @@ setTimeout(() => {
       JSON.parse(store["cutTracker.v1"]).entries.find(e => e.date === aiState.entries[0].date).protein === 165,
       JSON.stringify(JSON.parse(store["cutTracker.v1"]).entries[0]));
 
+    // 13. Loss rate band is now %/wk of trend weight, not a fixed kg/wk
+    // number — the exact same 0.6 kg/wk pace that reads "On track" for
+    // Jeff's real ~76-79kg (test 2) should read as too fast for a much
+    // lower trend weight, since 0.6 kg/wk is a far bigger share of a
+    // smaller body. Confirms the band actually recomputes, not just that
+    // the config field got renamed.
+    const rateState = JSON.parse(store["cutTracker.v1"]);
+    rateState.entries = [];
+    rateState.strength = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(day0 - i * 86400000).toISOString().slice(0, 10);
+      rateState.entries.push({ date: d, weight: +(40 - (13 - i) * (0.6 / 7)).toFixed(2) });
+    }
+    store["cutTracker.v1"] = JSON.stringify(rateState);
+    eval(html.match(/<script>([\s\S]*)<\/script>/)[1]);
+    expect("loss-rate band scales down for a lower trend weight (same 0.6 kg/wk now reads too fast)",
+      /Loss rate[\s\S]{0,200}(Slightly fast|Too fast)/i.test(strip(rendered["guardrails"])),
+      strip(rendered["guardrails"]));
+
     console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL PASS");
     process.exit(failures ? 1 : 0);
   }, 10);

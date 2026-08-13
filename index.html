@@ -619,7 +619,12 @@
       calTarget: 2300,      // cut intake target
       maintenance: 2800,    // estimated true maintenance
       proteinTarget: 160,   // non-negotiable
-      rateLo: 0.5, rateHi: 0.7,   // target loss band kg/wk
+      // target loss band as %/wk of current trend weight, not fixed kg/wk —
+      // 0.5-1% of bodyweight/week is the standard evidence-based range for
+      // losing fat while preserving muscle, and expressing it as a
+      // percentage means the absolute kg/wk target naturally shrinks as
+      // Jeff gets leaner instead of staying pinned to his start weight.
+      rateLoPct: 0.5, rateHiPct: 1.0,
       startDate: "2026-06-25", startWeight: 79.4,
       goal12: 74.0, goal10: 72.2,
       fatMass: 12.7,        // kg fat (from DEXA) — sets the fat-supply ceiling
@@ -778,13 +783,25 @@
   function evalGuards(m) {
     const c = state.config, g = [];
 
-    // 1. Loss rate
+    // 1. Loss rate — band is %/wk of current trend weight (see DEFAULTS),
+    // so the kg/wk numbers below are recomputed every render, not fixed.
+    // Crit threshold scales the same way (half a point above the upper
+    // band edge) rather than staying a flat 1.0 kg/wk — a fixed kg/wk crit
+    // ceiling would get relatively LOOSER as bodyweight drops (a smaller
+    // and smaller percentage), backwards from the muscle-preservation
+    // logic this guardrail exists for.
     (function () {
+      const w = m.trendWeight;
+      const loPct = c.rateLoPct, hiPct = c.rateHiPct, critPct = hiPct + 0.5;
+      const lo = w != null ? loPct / 100 * w : null;
+      const hi = w != null ? hiPct / 100 * w : null;
+      const crit = w != null ? critPct / 100 * w : null;
+      const bandTxt = w != null ? fmt(lo, 2) + "–" + fmt(hi, 2) + " kg/wk (" + fmt(loPct, 1) + "–" + fmt(hiPct, 1) + "% of " + fmt(w, 1) + " kg)" : "—";
       let sev, state_, sub, val = m.rate != null ? fmt(m.rate, 2) + " kg/wk" : "—";
-      if (m.rate == null) { sev = "none"; state_ = "No data"; sub = "Log at least 2 weigh-ins spanning a week to read your rate."; }
-      else if (m.rate > 1.0) { sev = "crit"; state_ = "Too fast"; sub = "Above 1 kg/wk pulls hard on muscle — nudge calories up toward maintenance."; }
-      else if (m.rate > c.rateHi) { sev = "warn"; state_ = "Slightly fast"; sub = "Just over your " + c.rateLo + "–" + c.rateHi + " kg/wk band. Add ~150–200 kcal."; }
-      else if (m.rate >= c.rateLo) { sev = "good"; state_ = "On target"; sub = "Right inside the " + c.rateLo + "–" + c.rateHi + " kg/wk band. Hold it."; }
+      if (m.rate == null || lo == null) { sev = "none"; state_ = "No data"; sub = "Log at least 2 weigh-ins spanning a week to read your rate."; }
+      else if (m.rate > crit) { sev = "crit"; state_ = "Too fast"; sub = "Above " + fmt(crit, 2) + " kg/wk (" + fmt(critPct, 1) + "% of bodyweight) pulls hard on muscle — nudge calories up toward maintenance."; }
+      else if (m.rate > hi) { sev = "warn"; state_ = "Slightly fast"; sub = "Just over your " + bandTxt + " band. Add ~150–200 kcal."; }
+      else if (m.rate >= lo) { sev = "good"; state_ = "On target"; sub = "Right inside your " + bandTxt + " band. Hold it."; }
       else if (m.rate >= 0.15) { sev = "good"; state_ = "Gentle"; sub = "Below band but still losing — fine, especially a low-step week. Tighten only if you want it faster."; }
       else if (m.rate >= -0.1) { sev = "warn"; state_ = "Stalled"; sub = "Trend is flat. If this holds a full week, trim ~150 kcal or add steps."; }
       else { sev = "warn"; state_ = "Gaining"; sub = "Trend is up. Expected right after an eat-more phase (glycogen); otherwise re-check intake."; }
@@ -1518,7 +1535,7 @@
 
   const CFG_FIELDS = [
     ["calTarget", "Calorie target"], ["rmr", "RMR floor"], ["proteinTarget", "Protein target g"],
-    ["maintenance", "Maintenance kcal"], ["rateLo", "Rate min kg/wk"], ["rateHi", "Rate max kg/wk"],
+    ["maintenance", "Maintenance kcal"], ["rateLoPct", "Rate min %/wk"], ["rateHiPct", "Rate max %/wk"],
     ["startWeight", "Start weight kg"], ["startDate", "Cut start date"],
     ["goal12", "12% goal kg"], ["goal10", "10% goal kg"],
     ["fatMass", "Fat mass kg (DEXA)"],
@@ -1530,7 +1547,7 @@
     document.getElementById("settings").innerHTML = CFG_FIELDS.map(([k, lbl]) => {
       const v = state.config[k];
       const type = TEXT_CFG[k] || "number";
-      const step = (k === "rateLo" || k === "rateHi" || k === "goal12" || k === "goal10" || k === "startWeight" || k === "fatMass") ? "0.1" : "1";
+      const step = (k === "rateLoPct" || k === "rateHiPct") ? "0.05" : (k === "goal12" || k === "goal10" || k === "startWeight" || k === "fatMass") ? "0.1" : "1";
       return '<div class="field"><label>' + lbl + '</label><input data-cfg="' + k + '" type="' + type + '" step="' + step + '" value="' + v + '"></div>';
     }).join("");
     renderGuardToggles();
@@ -1797,7 +1814,7 @@
       day_of_cut: dnum(todayStr()) - dnum(c.startDate) + 1,
       targets: {
         kcal: c.calTarget, rmr_floor: c.rmr, maintenance_estimate: c.maintenance,
-        protein_g: c.proteinTarget, rate_band_kg_wk: [c.rateLo, c.rateHi],
+        protein_g: c.proteinTarget, rate_band_pct_bodyweight_per_wk: [c.rateLoPct, c.rateHiPct],
         goal_weights_kg: [c.goal12, c.goal10], fat_mass_kg_dexa: c.fatMass,
         steps_baseline: [c.stepsLo, c.stepsHi]
       },
