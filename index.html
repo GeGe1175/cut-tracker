@@ -290,6 +290,7 @@
   .lft-mini-spark { width: 56px; height: 20px; flex-shrink: 0; display: block; }
 
   .pr-details { margin-top: 10px; }
+  .pr-details-heading { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-muted); }
   .lft-block { margin-top: 16px; }
   .lft-block:first-child { margin-top: 4px; }
   .pr-lift-name { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-muted); margin-bottom: 4px; }
@@ -455,10 +456,10 @@
           <button class="btn row-add" id="saveSet" type="submit">Save set</button>
         </form>
         <div id="liftList"></div>
-        <details class="settings pr-details" id="liftTrendDetails">
-          <summary>Trend &amp; records</summary>
+        <div class="pr-details" id="liftTrendDetails">
+          <div class="pr-details-heading">Trend &amp; records</div>
           <div id="liftDetail"></div>
-        </details>
+        </div>
       </section>
     </section>
 
@@ -1220,8 +1221,8 @@
         liftSparkSVG(sets, col) + '</div></div>';
     }).join("");
     box.querySelectorAll(".liftrow[data-lift]").forEach(row => row.addEventListener("click", () => {
-      const details = document.getElementById("liftTrendDetails");
-      details.open = true;
+      // Trend & records is always visible now (no more disclosure toggle),
+      // so tapping a lift just needs to scroll to its block.
       const block = document.querySelector('.lft-block[data-lift="' + row.dataset.lift.replace(/"/g, '\\"') + '"]');
       if (block && block.scrollIntoView) block.scrollIntoView({ behavior: "smooth", block: "center" });
     }));
