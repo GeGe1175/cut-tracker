@@ -278,9 +278,11 @@ setTimeout(() => {
       strip(rendered["guardrails"]));
 
     // 15. Est. body fat readout: same hold-lean-mass logic the 12%/10% goal
-    // weights are built on, run in reverse off current trend weight.
-    // Default config (startWeight 79.4, fatMass 12.7) -> lean mass 66.7 kg;
-    // a flat 76 kg trend weight should read (76-66.7)/76 = 12.24% -> "12.2".
+    // weights are built on, run in reverse off current trend weight. Uses
+    // cfg.leanMass directly (65.05 kg, the DEXA's own fat-free-mass
+    // reading) -- NOT startWeight - fatMass, which would mix a scale
+    // weight with a DEXA fat mass from two different instruments. A flat
+    // 76 kg trend weight should read (76-65.05)/76 = 14.41% -> "14.4".
     const bfState = JSON.parse(store["cutTracker.v1"]);
     bfState.entries = [];
     for (let i = 10; i >= 0; i--) {
@@ -289,8 +291,8 @@ setTimeout(() => {
     }
     store["cutTracker.v1"] = JSON.stringify(bfState);
     eval(html.match(/<script>([\s\S]*)<\/script>/)[1]);
-    expect("Est. body fat readout computes from trend weight and configured lean mass",
-      /Est\. body fat[\s\S]{0,40}12\.2[\s\S]{0,60}66\.7/i.test(strip(rendered["readouts"])),
+    expect("Est. body fat readout computes from trend weight and configured DEXA lean mass",
+      /Est\. body fat[\s\S]{0,40}14\.4[\s\S]{0,60}65\.0/i.test(strip(rendered["readouts"])),
       strip(rendered["readouts"]));
 
     console.log(failures ? "\n" + failures + " FAILURE(S)" : "\nALL PASS");

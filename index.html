@@ -632,8 +632,18 @@
       rateLoPct: 0.5, rateHiPct: 1.0,
       startDate: "2026-06-25", startWeight: 79.4,
       goal12: 74.0, goal10: 72.2,
-      fatMass: 12.7,        // kg fat (from DEXA) — sets the fat-supply ceiling
-      fatKcalPerKg: 30,     // kcal/day fat can release per kg fat (12.7 × 30 ≈ 380)
+      fatMass: 12.72,        // kg fat (from DEXA, 2026-06-22 scan) — sets the fat-supply ceiling
+      // Fat-free mass (lean tissue + bone) straight from the DEXA report's
+      // own "LEAN + BMC" total — NOT derived as startWeight − fatMass. That
+      // derivation mixes the *scale's* startWeight with the *DEXA's*
+      // fatMass, which are two different instruments that don't agree
+      // (this report's own total mass, 77.76 kg, differs from the 79.4 kg
+      // scale reading by 1.64 kg) — subtracting across instruments produces
+      // a wrong lean mass. This value is what goal12/goal10 below were
+      // actually computed from (65.05/0.88≈74.0, 65.05/0.90≈72.2) and what
+      // the Est. body fat readout should use too.
+      leanMass: 65.05,
+      fatKcalPerKg: 30,     // kcal/day fat can release per kg fat (12.72 × 30 ≈ 382)
       stepsLo: 8000, stepsHi: 12000, // activity band the maintenance estimate assumes
       chartRange: "all",             // chart display window: 1w | 1m | all (display only — regression unaffected)
       lift1: "Weighted dip", lift2: "Weighted pull-up", lift3: "Squat",  // benchmark lifts (editable)
@@ -785,10 +795,13 @@
     // goal12/goal10 are target weights AT a given bf% assuming lean mass
     // never drops from its DEXA baseline; this is that same formula run in
     // reverse, off current trend weight, for "what's my bf% right now").
+    // Uses cfg.leanMass directly (the DEXA's own fat-free-mass reading) —
+    // NOT startWeight − fatMass, which mixes a scale weight with a DEXA
+    // fat mass from two different instruments that don't agree.
     // Best-case by construction — if the cut is actually costing muscle
     // (the exact thing the guardrails exist to catch), this reads more
     // optimistic than reality. Not a substitute for a real DEXA/scan.
-    const leanMass = cfg.startWeight - cfg.fatMass;
+    const leanMass = cfg.leanMass;
     const estBF = trendWeight != null && leanMass > 0 ? Math.max(0, (trendWeight - leanMass) / trendWeight * 100) : null;
 
     return { es, weights, trend, trendWeight, rate, rateN, rateSpan, avgKcal, avgProt, minKcal, avgSteps,
@@ -1599,7 +1612,7 @@
     ["maintenance", "Maintenance kcal"], ["rateLoPct", "Rate min %/wk"], ["rateHiPct", "Rate max %/wk"],
     ["startWeight", "Start weight kg"], ["startDate", "Cut start date"],
     ["goal12", "12% goal kg"], ["goal10", "10% goal kg"],
-    ["fatMass", "Fat mass kg (DEXA)"],
+    ["fatMass", "Fat mass kg (DEXA)"], ["leanMass", "Lean+bone mass kg (DEXA)"],
     ["stepsLo", "Steps baseline min"], ["stepsHi", "Steps baseline max"],
     ["lift1", "Benchmark lift 1"], ["lift2", "Benchmark lift 2"], ["lift3", "Benchmark lift 3"]
   ];
@@ -1608,7 +1621,7 @@
     document.getElementById("settings").innerHTML = CFG_FIELDS.map(([k, lbl]) => {
       const v = state.config[k];
       const type = TEXT_CFG[k] || "number";
-      const step = (k === "rateLoPct" || k === "rateHiPct") ? "0.05" : (k === "goal12" || k === "goal10" || k === "startWeight" || k === "fatMass") ? "0.1" : "1";
+      const step = (k === "rateLoPct" || k === "rateHiPct") ? "0.05" : (k === "goal12" || k === "goal10" || k === "startWeight" || k === "fatMass" || k === "leanMass") ? "0.1" : "1";
       return '<div class="field"><label>' + lbl + '</label><input data-cfg="' + k + '" type="' + type + '" step="' + step + '" value="' + v + '"></div>';
     }).join("");
     renderGuardToggles();
