@@ -192,6 +192,7 @@
     background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm);
     padding: 12px 12px 11px; box-shadow: var(--shadow);
   }
+  .stat.wide { grid-column: 1 / -1; }
   .stat .lbl { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint); }
   .stat .val { font-family: var(--mono); font-size: 22px; font-weight: 600; margin-top: 5px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
   .stat .val small { font-size: 12px; font-weight: 500; color: var(--ink-faint); margin-left: 2px; }
@@ -778,8 +779,19 @@
     const intakeDef = avgKcal != null ? cfg.maintenance - avgKcal : null;
     const fatCeil = Math.round(cfg.fatMass * cfg.fatKcalPerKg);
 
+    // Estimated current body fat %, same "hold lean mass constant" logic
+    // that the 12%/10% goal weights are built on (see DEFAULTS.config —
+    // goal12/goal10 are target weights AT a given bf% assuming lean mass
+    // never drops from its DEXA baseline; this is that same formula run in
+    // reverse, off current trend weight, for "what's my bf% right now").
+    // Best-case by construction — if the cut is actually costing muscle
+    // (the exact thing the guardrails exist to catch), this reads more
+    // optimistic than reality. Not a substitute for a real DEXA/scan.
+    const leanMass = cfg.startWeight - cfg.fatMass;
+    const estBF = trendWeight != null && leanMass > 0 ? Math.max(0, (trendWeight - leanMass) / trendWeight * 100) : null;
+
     return { es, weights, trend, trendWeight, rate, rateN, rateSpan, avgKcal, avgProt, minKcal, avgSteps,
-      intakeDef, fatCeil, calDays: c7.length, protDays: p7.length, stepDays: s7.length, latest };
+      intakeDef, fatCeil, leanMass, estBF, calDays: c7.length, protDays: p7.length, stepDays: s7.length, latest };
   }
 
   // ---------- guardrail evaluation ----------
@@ -1142,9 +1154,11 @@
         }
       }
     }
+    const bfCap = m.estBF != null ? "holds " + fmt(m.leanMass, 1) + " kg lean (DEXA)" : "log a weigh-in first";
     document.getElementById("readouts").innerHTML =
       stat("Trend weight", fmt(m.trendWeight, 2), "kg", "7-day average", true) +
-      stat("Lost so far", lost != null ? (lost >= 0 ? "" : "+") + fmt(Math.abs(lost), 2) : "—", "kg", lostCap, false);
+      stat("Lost so far", lost != null ? (lost >= 0 ? "" : "+") + fmt(Math.abs(lost), 2) : "—", "kg", lostCap, false) +
+      stat("Est. body fat", fmt(m.estBF, 1), "%", bfCap, false, true);
 
     // guardrails — a disabled one is dropped from this list entirely (not
     // just dimmed): Jeff turned it off specifically so its untrusted data
@@ -1343,9 +1357,9 @@
     }));
   }
 
-  function stat(lbl, val, unit, cap, accent) {
+  function stat(lbl, val, unit, cap, accent, wide) {
     const showUnit = val !== "—";
-    return '<div class="stat"><div class="lbl">' + lbl + '</div>' +
+    return '<div class="stat' + (wide ? " wide" : "") + '"><div class="lbl">' + lbl + '</div>' +
       '<div class="val' + (accent ? " accent" : "") + '">' + val + (showUnit ? '<small>' + unit + '</small>' : "") + '</div>' +
       '<div class="cap">' + cap + '</div></div>';
   }
