@@ -1092,10 +1092,19 @@
       cross.setAttribute("x1", gx); cross.setAttribute("x2", gx); cross.style.opacity = ".9";
       foc.setAttribute("cx", gx); foc.setAttribute("cy", gy); foc.style.opacity = "1";
       cx.tip.style.opacity = "1";
-      cx.tip.style.left = (gx / cx.W * 100) + "%";
       cx.tip.style.top = (gy / cx.H * 100) + "%";
       cx.tip.innerHTML = '<span class="t-date">' + p.date + '</span><br><b>' + p.y.toFixed(2) + '</b> kg' +
         (t ? ' · <b>' + t.y.toFixed(2) + '</b> avg' : "");
+      // Tooltip is centered on the touch point via translateX(-50%), which
+      // pushes it past the chart's left (or right) edge for points near
+      // either end — visibly overflowing the card. Clamp the CENTER so the
+      // full box, once centered on it, stays within the container; measured
+      // in px (not the %-based positioning above) since the tooltip's own
+      // width varies with its content.
+      const boxW = cx.box.clientWidth, tipW = cx.tip.offsetWidth, pad = 4;
+      const rawLeftPx = gx / cx.W * boxW;
+      const clampedLeftPx = Math.min(Math.max(rawLeftPx, tipW / 2 + pad), boxW - tipW / 2 - pad);
+      cx.tip.style.left = clampedLeftPx + "px";
     }
     function leave() { cross.style.opacity = "0"; foc.style.opacity = "0"; cx.tip.style.opacity = "0"; }
     cx.svg.addEventListener("pointermove", move);
